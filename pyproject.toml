@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "mispy"
+version = "0.0.1"
+authors = [
+  { name="Pavel Tsyngalev", email="ptsyngalev@gmail.com" },
+]
+description = "Package for load mesh"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "build",
+    "numpy>=1.21",
+    "pytest"
+]
+
+[project.urls]
+Homepage = "https://github.com/FaJey1/mispy"
+Issues = "https://github.com/FaJey1/mispy/issues"

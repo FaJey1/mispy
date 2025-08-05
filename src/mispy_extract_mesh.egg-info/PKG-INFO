@@ -1,0 +1,36 @@
+Metadata-Version: 2.4
+Name: mispy_extract_mesh
+Version: 0.0.1
+Summary: Package for load mesh
+Author-email: Pavel Tsyngalev <ptsyngalev@gmail.com>
+Project-URL: Homepage, https://github.com/FaJey1/mispy
+Project-URL: Issues, https://github.com/FaJey1/mispy/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: build
+Requires-Dist: numpy>=1.21
+Requires-Dist: pytest
+Dynamic: license-file
+
+# Настройка репозитория
+
+0. Создать виртуальное окружения
+`python3.11 -m venv venv`
+`source venv/bin/activate`
+
+1. Установить зависимости
+`pip install --upgrade pip setuptools wheel`
+`pip install .`
+
+# Запуск тестов
+`pytest -v`
+
+## Сценарии
+
+0. Создание сетки из файла - проверка корректности создания сетки
+
+
