@@ -1,8 +1,8 @@
 Metadata-Version: 2.4
-Name: mispy_extract_mesh
-Version: 0.0.1
+Name: mispy
+Version: 0.0.2
 Summary: Package for load mesh
-Author-email: Pavel Tsyngalev <ptsyngalev@gmail.com>
+Author-email: Alexey Rybakov <ptsyngalev@gmail.com>, Pavel Tsyngalev <ptsyngalev@gmail.com>
 Project-URL: Homepage, https://github.com/FaJey1/mispy
 Project-URL: Issues, https://github.com/FaJey1/mispy/issues
 Classifier: Programming Language :: Python :: 3
@@ -13,6 +13,7 @@ Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: build
 Requires-Dist: numpy>=1.21
+Requires-Dist: matplotlib
 Requires-Dist: pytest
 Dynamic: license-file
 
@@ -31,6 +32,13 @@ Dynamic: license-file
 
 ## Сценарии
 
-0. Создание сетки из файла - проверка корректности создания сетки
+0. Создание сетки из файла (модуль mispy_extract_mesh) - проверка корректности создания сетки
 
+# Сборка
+`python3.11 -m build`
 
+# Локальная отладка
+При отладке модулей локально необходимо подгрузить в editable-режиме:
+`pip install -e .`
+Запуск .py файлов выполняется командой:
+`PYTHONPATH=src python3 -m mispy.<имя модуля>.<имя функции>`, mispy - имя пакета

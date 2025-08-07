@@ -3,9 +3,10 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "mispy"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
-  { name="Pavel Tsyngalev", email="ptsyngalev@gmail.com" },
+  { name="Alexey Rybakov", email="rybakov.aax@gmail.com" },
+  { name="Pavel Tsyngalev", email="ptsyngalev@gmail.com" }
 ]
 description = "Package for load mesh"
 readme = "README.md"
@@ -18,9 +19,13 @@ classifiers = [
 dependencies = [
     "build",
     "numpy>=1.21",
+    "matplotlib",
     "pytest"
 ]
 
 [project.urls]
 Homepage = "https://github.com/FaJey1/mispy"
 Issues = "https://github.com/FaJey1/mispy/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
