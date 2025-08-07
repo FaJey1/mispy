@@ -1,3 +1,4 @@
 build
 numpy>=1.21
+matplotlib
 pytest
