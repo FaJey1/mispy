@@ -4,6 +4,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 from numpy import linalg as LA
 
+
 def zone_color(zone):
     colors = [
         "#e6194b",  # красный
@@ -18,9 +19,41 @@ def zone_color(zone):
         "#fabebe",  # светло-розовый
     ]
     return colors[zone]
-    
 
-def mesh_plotter(mesh):
+def border_plotter(faces: Face):
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    zones = {}
+    next_id = 0
+    
+    for face in faces:
+        zone_name = face.zone.name
+        if zone_name not in zones:
+            zones[zone_name] = next_id
+            next_id += 1
+        
+        # Get&draw face nodes
+        node_coords = [node.p for node in face.nodes]
+        node_coords = np.array(node_coords)
+        ax.scatter(node_coords[:, 0], node_coords[:, 1], node_coords[:, 2], color='blue', s=20)
+        
+        # Get&draw face edges
+        for p1, p2 in ((edge.nodes[0].p, edge.nodes[1].p) for edge in face.edges):
+            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color='blue')
+        
+        # Draw face
+        poly = Poly3DCollection([node_coords], alpha=0.2, facecolor="blue", edgecolors='none')
+        ax.add_collection3d(poly)
+    
+    ax.set_title("border")
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    plt.tight_layout()
+    plt.show()
+
+def mesh_plotter(mesh, board=[], board_enable=False):
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
 
@@ -45,6 +78,27 @@ def mesh_plotter(mesh):
         # Draw face
         poly = Poly3DCollection([node_coords], alpha=0.2, facecolor=zone_color(zones[zone_name]), edgecolors='none')
         ax.add_collection3d(poly)
+    
+    # Draw intersection border
+    if board_enable:
+        for face in board:
+            zone_name = face.zone.name
+            if zone_name not in zones:
+                zones[zone_name] = next_id
+                next_id += 1
+            
+            # Get&draw face nodes
+            node_coords = [node.p for node in face.nodes]
+            node_coords = np.array(node_coords)
+            ax.scatter(node_coords[:, 0], node_coords[:, 1], node_coords[:, 2], color='blue', s=20)
+            
+            # Get&draw face edges
+            for p1, p2 in ((edge.nodes[0].p, edge.nodes[1].p) for edge in face.edges):
+                ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color='blue')
+            
+            # Draw face
+            poly = Poly3DCollection([node_coords], alpha=0.2, facecolor="blue", edgecolors='none')
+            ax.add_collection3d(poly)
     
     ax.set_title(mesh.title)
     ax.set_xlabel('X')
