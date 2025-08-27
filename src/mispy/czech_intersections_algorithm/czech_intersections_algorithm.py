@@ -4,6 +4,9 @@ from numpy import linalg as LA
 from typing import List, Tuple, Optional
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from shapely.geometry import Polygon, LineString
+from shapely.ops import split
+from scipy.spatial import Delaunay
 
 # ==================================================================================================
 class IntersectionSegment:
@@ -36,6 +39,8 @@ class CzechIntersectionsAlgorithm:
     def __init__(self, mesh):
         self.mesh = mesh
         self.intersection_segments = self.find_all_intersections()
+        self.border_multiline = self.find_border_multiline()
+        self.border_faces = self.get_border_faces()
 # ==================================================================================================
 # Геометрические утилиты
 # ==================================================================================================
@@ -133,7 +138,211 @@ class CzechIntersectionsAlgorithm:
                     segments.append(result)
         self.intersection_segments = segments
         return segments
+    
+    def get_or_create_node(self, nodes: Node, point: np.ndarray):
+        # Проверяем, есть ли уже узел с такими координатами
+        for n in nodes:
+            if np.allclose(n.p, point):  # сравнение с допуском
+                return n
+        # Создаём новый узел
+        node = Node(point)
+        nodes.append(node)
+        return node
+        
+    def find_border_multiline(self) -> List[Edge]:
+        nodes = []
+        edges = []
 
+        for segment in self.intersection_segments:
+            # Получаем/создаём узлы для концов отрезка
+            n1 = self.get_or_create_node(nodes, segment.point1)
+            n2 = self.get_or_create_node(nodes, segment.point2)
+            # Создаём ребро
+            edge = Edge()
+            edge.nodes = [n1, n2]
+            edge.faces = [segment.face_a, segment.face_b]
+
+            # Добавляем в коллекции
+            edges.append(edge)
+
+            # Сохраняем связи
+            for f in [segment.face_a, segment.face_b]:
+                if edge not in f.edges:
+                    f.edges.append(edge)
+            for n in [n1, n2]:
+                if edge not in n.edges:
+                    n.edges.append(edge)
+                for f in [segment.face_a, segment.face_b]:
+                    if f not in n.faces:
+                        n.faces.append(f)
+
+        return edges
+    
+    
+    def delaunay_triangulation(self):
+        """
+        Делает разбиение пересекающихся треугольников вдоль линии пересечения
+        и триангулирует каждую часть в 3D (через проекцию в локальную 2D-плоскость).
+        """
+        new_faces = []
+
+        for segment in self.intersection_segments:
+            face_a = segment.face_a
+            face_b = segment.face_b
+
+            tri_a = Polygon([node.p for node in face_a.nodes])
+            tri_b = Polygon([node.p for node in face_b.nodes])
+            line = LineString([segment.point1, segment.point2])
+
+            split_a = split(tri_a, line)
+            split_b = split(tri_b, line)
+
+            polys = []
+            for g in split_a.geoms:
+                if g.geom_type == "Polygon":
+                    polys.append(g)
+            for g in split_b.geoms:
+                if g.geom_type == "Polygon":
+                    polys.append(g)
+
+            for poly in polys:
+                coords3d = np.array(poly.exterior.coords)
+
+                if len(coords3d) < 3:
+                    continue
+
+                # --- 1. Находим базис плоскости ---
+                # Берём первые три точки, строим нормаль
+                v1 = coords3d[1] - coords3d[0]
+                v2 = coords3d[2] - coords3d[0]
+                normal = np.cross(v1, v2)
+                normal /= np.linalg.norm(normal)
+
+                # Первая ось в плоскости
+                axis_x = v1 / np.linalg.norm(v1)
+                # Вторая ось в плоскости (ортогональна первой и нормали)
+                axis_y = np.cross(normal, axis_x)
+                axis_y /= np.linalg.norm(axis_y)
+
+                # --- 2. Проецируем в локальную 2D-плоскость ---
+                coords2d = np.array([
+                    [np.dot(p - coords3d[0], axis_x), np.dot(p - coords3d[0], axis_y)]
+                    for p in coords3d
+                ])
+
+                # --- 3. Делаем Delaunay в 2D ---
+                try:
+                    delaunay = Delaunay(coords2d, qhull_options="QJ")
+                except Exception:
+                    continue
+
+                # --- 4. Восстанавливаем треугольники в 3D ---
+                for simplex in delaunay.simplices:
+                    pts = coords3d[simplex]
+                    nodes = [Node(p) for p in pts]
+                    f = Face()
+                    f.nodes = nodes
+                    new_faces.append(f)
+        
+        # Собираем множество координат граничных узлов
+        border_points = {
+            tuple(node.p) for edge in self.border_multiline for node in edge.nodes
+        }
+
+        # Фильтруем новые треугольники
+        filtered_faces = []
+        for face in new_faces:
+            if any(tuple(node.p) in border_points for node in face.nodes):
+                filtered_faces.append(face)
+
+        # Результат
+        new_faces = filtered_faces
+        return new_faces 
+        
+
+    def delaunay_triangulation_v2(self):
+        """
+        Делает разбиение пересекающихся треугольников вдоль линии пересечения.
+        Для каждого треугольника создается 4-точечный многоугольник (2 точки линии + 2 вершины треугольника,
+        которые не лежат на линии), затем выполняется Delaunay триангуляция.
+        """
+        def point_on_edge(p, a, b, tol=1e-8):
+            """Проверка, лежит ли точка p на отрезке ab"""
+            ab = b - a
+            ap = p - a
+            cross = np.linalg.norm(np.cross(ab, ap))
+            if cross > tol:
+                return False
+            dot = np.dot(ap, ab)
+            if dot < -tol or dot > np.dot(ab, ab) + tol:
+                return False
+            return True
+
+        new_faces = []
+        
+        polygons_coord = []
+
+        for segment in self.intersection_segments:
+            line_points = [segment.point1, segment.point2]
+
+            for face in [segment.face_a, segment.face_b]:
+                tri_coords = np.array([node.p for node in face.nodes])
+
+                # выбираем две вершины треугольника, которые НЕ лежат на линии пересечения
+                remaining_points = []
+                for i in range(3):
+                    p = tri_coords[i]
+                    if not any(point_on_edge(lp, tri_coords[j], tri_coords[(j+1)%3]) for j in range(3) for lp in line_points):
+                        remaining_points.append(p)
+
+                if len(remaining_points) != 2:
+                    # вырожденный случай: берём любые две точки треугольника
+                    remaining_points = tri_coords[:2]
+
+                # формируем 4-точечный многоугольник: 2 точки линии + 2 вершины треугольника
+                quad_points = np.vstack([line_points, remaining_points])
+                if len(quad_points) < 4:
+                    raise Exception(f"quad_points < 4: {quad_points}, line_points: {line_points} but remaining_points: {remaining_points}")
+                polygons_coord.append(quad_points)
+                
+                # --- 1. Находим базис плоскости ---
+                v1 = quad_points[1] - quad_points[0]
+                v2 = quad_points[2] - quad_points[0]
+                normal = np.cross(v1, v2)
+                norm = np.linalg.norm(normal)
+                if norm < 1e-8:
+                    continue  # вырожденный случай
+                normal /= norm
+
+                axis_x = v1 / np.linalg.norm(v1)
+                axis_y = np.cross(normal, axis_x)
+                axis_y /= np.linalg.norm(axis_y)
+
+                # --- 2. Проекция в локальную 2D плоскость ---
+                coords2d = np.array([
+                    [np.dot(p - quad_points[0], axis_x), np.dot(p - quad_points[0], axis_y)]
+                    for p in quad_points
+                ])
+
+                # --- 3. Delaunay триангуляция ---
+                try:
+                    delaunay = Delaunay(coords2d, qhull_options="QJ")
+                except Exception:
+                    raise Exception("degenerate triangle")
+
+                # --- 4. Создаём новые Face ---
+                for simplex in delaunay.simplices:
+                    pts = quad_points[simplex]
+                    nodes = [Node(p) for p in pts]
+                    f = Face()
+                    f.nodes = nodes
+                    f.zone = face.zone
+                    new_faces.append(f)
+
+        return new_faces, polygons_coord
+
+    
+    
     def get_border_faces(self):
         seen = set()
         list_of_faces = []
@@ -143,10 +352,6 @@ class CzechIntersectionsAlgorithm:
                     seen.add(face)
                     list_of_faces.append(face)
         return list_of_faces
-    
-    def describe_border_faces(self):
-        for segment in self.intersection_segments:
-            segment.describe()
 
     
     def change_mesh(self):

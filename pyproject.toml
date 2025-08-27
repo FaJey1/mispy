@@ -20,7 +20,9 @@ dependencies = [
     "build",
     "numpy>=1.21",
     "matplotlib",
-    "pytest"
+    "pytest",
+    "shapely",
+    "scipy",
 ]
 
 [project.urls]
