@@ -75,55 +75,75 @@ def border_plotter(faces: list, edges: list, polygons_coord: list):
 
 # ==================================================================================================
 
-def mesh_plotter(mesh: Mesh, border_faces: list = [], border_multiline: list = [], border_enable: bool = False):
+def draw_multiline(ax, edges, color_map=None, default_color='blue'):
+    pass
+
+
+# ==================================================================================================
+
+def draw_faces(ax, faces, color_map=None, default_color='blue'):
+    """
+    Рисует грани на 3D-оси.
+    
+    Parameters
+    ----------
+    ax : Axes3D
+        Объект matplotlib 3D axes.
+    faces : list[Face]
+        Список граней для отрисовки.
+    color_map : dict, optional
+        Словарь {zone_name: color} для зон.
+    default_color : str
+        Цвет, если zone_name не указан в color_map.
+    """
+    for face in faces:
+        zone_name = face.zone.name
+        color = color_map.get(zone_name, default_color) if color_map else default_color
+
+        # Координаты узлов
+        node_coords = np.array([node.p for node in face.nodes])
+        ax.scatter(node_coords[:, 0], node_coords[:, 1], node_coords[:, 2], color=color, s=20)
+
+        # Рёбра
+        for edge in face.edges:
+            p1, p2 = edge.nodes[0].p, edge.nodes[1].p
+            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color=color)
+
+        # Грань
+        poly = Poly3DCollection([node_coords], alpha=0.2, facecolor=color, edgecolors='none')
+        ax.add_collection3d(poly)
+
+
+# ==================================================================================================
+
+def mesh_plotter(mesh: Mesh, border: dict = {}, border_enable: bool = False):
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
 
     zones = {}
     next_id = 0
-    
     for face in mesh.faces:
         zone_name = face.zone.name
         if zone_name not in zones:
             zones[zone_name] = next_id
             next_id += 1
-        
-        # Get&draw face nodes
-        node_coords = [node.p for node in face.nodes]
-        node_coords = np.array(node_coords)
-        ax.scatter(node_coords[:, 0], node_coords[:, 1], node_coords[:, 2], color='red', s=20)
-        
-        # Get&draw face edges
-        for p1, p2 in ((edge.nodes[0].p, edge.nodes[1].p) for edge in face.edges):
-            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color='orange')
-        
-        # Draw face
-        poly = Poly3DCollection([node_coords], alpha=0.2, facecolor=zone_color(zones[zone_name]), edgecolors='none')
-        ax.add_collection3d(poly)
-    
-    # Draw intersection border
+    color_map = {name: zone_color(idx) for name, idx in zones.items()}
+    draw_faces(ax, mesh.faces, color_map=color_map)
+
     if border_enable:
-        for face in border_faces:
-            zone_name = face.zone.name
-            if zone_name not in zones:
-                zones[zone_name] = next_id
-                next_id += 1
-            
-            # Get&draw face nodes
-            node_coords = [node.p for node in face.nodes]
-            node_coords = np.array(node_coords)
-            ax.scatter(node_coords[:, 0], node_coords[:, 1], node_coords[:, 2], color='blue', s=20)
-            
-            # Get&draw face edges
-            for p1, p2 in ((edge.nodes[0].p, edge.nodes[1].p) for edge in face.edges):
-                ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color='blue')
-            
-            # Draw face
-            poly = Poly3DCollection([node_coords], alpha=0.2, facecolor="blue", edgecolors='none')
-            ax.add_collection3d(poly)
-        for p1, p2 in ((edge.nodes[0].p, edge.nodes[1].p) for edge in border_multiline):
-            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color='red')
-    
+        candidate_faces = border.get("border_candidate_faces", [])
+        if candidate_faces:
+            draw_faces(ax, candidate_faces, default_color='purple')
+
+        border_faces = border.get("border_faces", [])
+        if border_faces:
+            draw_faces(ax, border_faces, default_color='blue')
+
+        border_multiline = border.get("border_multiline", [])
+        if border_multiline:
+            draw_multiline(ax, border_multiline, default_color='red')
+
+
     ax.set_title(mesh.title)
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
