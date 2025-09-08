@@ -956,12 +956,12 @@ class Mesh:
 
     # ----------------------------------------------------------------------------------------------
 
-    # def find_face_by_id(self, id):
-    #     index = bisect_left(self.faces, id, key=lambda f:f.glo_id)
-    #     if index != len(self.faces) and self.faces[index].glo_id == id:
-    #         return self.faces[index]
-    #     else:
-    #         return None
+    def find_face_by_id(self, id):
+        index = bisect_left(self.faces, id, key=lambda f:f.glo_id)
+        if index != len(self.faces) and self.faces[index].glo_id == id:
+            return self.faces[index]
+        else:
+            return None
 
     # ----------------------------------------------------------------------------------------------
 
