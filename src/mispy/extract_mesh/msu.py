@@ -525,7 +525,9 @@ class Face:
             Neighbour face or None.
         """
 
-        assert len(e.faces) == 2
+        # assert len(e.faces) == 2
+        if len(e.faces) != 2:
+            return None
 
         if self == e.faces[0]:
             return e.faces[1]
