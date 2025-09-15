@@ -11,6 +11,7 @@ def mesh_statistics(mesh):
     print("Mesh summary:")
     for key, value in info.items():
         print(f"  {key}: {value}")
+    return info
     
 
 # ==================================================================================================
