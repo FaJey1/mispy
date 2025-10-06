@@ -31,7 +31,7 @@ def draw_planes(ax,
                 alpha=0.2,
                 size_ratio=0.7,      # доля размера грани для квадрата
                 draw_intersection=True,
-                line_ratio=0.5):     # доля размера грани для линии
+                line_ratio=1):     # доля размера грани для линии
 
     planes = []  # (нормаль, центр, размер)
 
@@ -50,7 +50,7 @@ def draw_planes(ax,
         size = max(side_lengths) * size_ratio
         line_len = max(side_lengths) * line_ratio
 
-        planes.append((normal, center, size, line_len))
+        #planes.append((normal, center, size, line_len))
 
         # базис
         u = v1 / np.linalg.norm(v1)
@@ -203,6 +203,7 @@ def mesh_plotter(mesh,
 def face_plotter(border_faces_classification = [],
                  intersection_line = [], 
                  text_enable=True, 
+                 new_faces = [],
                  intersection_enable=False, 
                  nodes_enable=False, 
                  edge_enable=False,
@@ -211,12 +212,19 @@ def face_plotter(border_faces_classification = [],
                  alpha=0.3):
     
     num = 0
-    for face_pair, line in zip(border_faces_classification, intersection_line):
+    for face_pair, line, new_face_pair in zip(border_faces_classification, intersection_line, new_faces):
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111, projection='3d')
         coords1 = np.array([node.p for node in face_pair["faces"][0].nodes])
         coords2 = np.array([node.p for node in face_pair["faces"][1].nodes])
         colors = np.random.rand(2, 3)
+        draw_face(ax = ax, faces_coord = [coords1, coords2], colors = list(colors), alpha = alpha, edge_enable = edge_enable)
+        coords1 = np.array([node.p 
+                            for face in new_face_pair["face_0_triangulation"] 
+                            for node in face.nodes])
+        coords2 = np.array([node.p 
+                            for face in new_face_pair["face_1_triangulation"] 
+                            for node in face.nodes])
         draw_face(ax = ax, faces_coord = [coords1, coords2], colors = list(colors), alpha = alpha, edge_enable = edge_enable)
         
         if plane_enable:

@@ -31,6 +31,7 @@ class CzechIntersectionsAlgorithm:
         self.last_edge = max([edge.glo_id for edge in self.mesh.edges]) + 1
         self.new_mesh = None
         self.new_faces = []
+        self.new_faces_pair = []
         self.new_edges = []
         self.new_nodes = []
 
@@ -312,6 +313,8 @@ class CzechIntersectionsAlgorithm:
         Триангуляция каждой пары пересекающихся граней через линию пересечения.
         Новые треугольники сохраняются в self.new_face, новые ребра — в self.new_edge.
         """
+        
+        
         for face_pair_tuple, intersection_edge in zip(self.border_faces_pairs, self.border_multiline):
             face0, face1 = face_pair_tuple["faces"]
 
@@ -378,8 +381,8 @@ class CzechIntersectionsAlgorithm:
                 return faces
 
             # триангулируем каждую грань
-            triangulate_polygon(polygon0_nodes)
-            triangulate_polygon(polygon1_nodes)
+            self.new_faces_pair.append({"face_0_triangulation": triangulate_polygon(polygon0_nodes), 
+                                        "face_1_triangulation": triangulate_polygon(polygon1_nodes)})
         
         
     def fix_mesh(self):
