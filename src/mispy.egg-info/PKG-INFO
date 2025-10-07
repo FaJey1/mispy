@@ -1,8 +1,8 @@
 Metadata-Version: 2.4
 Name: mispy
 Version: 0.0.2
-Summary: Package for load mesh
-Author-email: Alexey Rybakov <ptsyngalev@gmail.com>, Pavel Tsyngalev <ptsyngalev@gmail.com>
+Summary: Package for delete in intersection mesh
+Author-email: Alexey Rybakov <rybakov.aax@gmail.com>, Pavel Tsyngalev <ptsyngalev@gmail.com>
 Project-URL: Homepage, https://github.com/FaJey1/mispy
 Project-URL: Issues, https://github.com/FaJey1/mispy/issues
 Classifier: Programming Language :: Python :: 3
@@ -11,10 +11,11 @@ Classifier: Operating System :: OS Independent
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: build
-Requires-Dist: numpy>=1.21
-Requires-Dist: matplotlib
-Requires-Dist: pytest
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.11
+Requires-Dist: shapely>=2.0
+Requires-Dist: matplotlib>=3.8
+Requires-Dist: pytest>=7.0
 Dynamic: license-file
 
 # Настройка репозитория
@@ -32,7 +33,9 @@ Dynamic: license-file
 
 ## Сценарии
 
-0. Создание сетки из файла (модуль mispy_extract_mesh) - проверка корректности создания сетки
+0. Создание сетки из файла (модуль mispy_extract_mesh)
+1. Отрисовка сетки из файла (модуль mispy_mesh_plottly)
+2. Вывод статистики сетки из файла (модуль mispy_mesh_statistics)
 
 # Сборка
 `python3.11 -m build`
