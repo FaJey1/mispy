@@ -16,6 +16,9 @@ Requires-Dist: scipy>=1.11
 Requires-Dist: shapely>=2.0
 Requires-Dist: matplotlib>=3.8
 Requires-Dist: pytest>=7.0
+Requires-Dist: networkx
+Requires-Dist: pygraphviz
+Requires-Dist: yaspin
 Dynamic: license-file
 
 # Настройка репозитория
@@ -27,6 +30,16 @@ Dynamic: license-file
 1. Установить зависимости
 `pip install --upgrade pip setuptools wheel`
 `pip install .`
+
+2. Установка pygraphviz
+```bash
+  pip install pygraphviz \
+  --no-cache-dir \
+  --config-settings="--global-option=build_ext" \
+  --config-settings="--global-option=-I/opt/homebrew/opt/graphviz/include/" \
+  --config-settings="--global-option=-L/opt/homebrew/opt/graphviz/lib/"
+```
+
 
 # Запуск тестов
 `pytest -v`

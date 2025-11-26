@@ -1,1 +1,1 @@
-from .main import BVH
+from .main import BVHTree

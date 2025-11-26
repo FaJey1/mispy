@@ -300,6 +300,11 @@ class Face:
         self.nodes = []
         self.edges = []
         self.zone = None
+        
+        self.bounding_boxes = []
+        self.elongated_axis = 0
+        self.centroids = []
+        
         # Area of the face.
         self.area = 0.0
 

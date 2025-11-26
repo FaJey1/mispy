@@ -8,6 +8,16 @@
 `pip install --upgrade pip setuptools wheel`
 `pip install .`
 
+2. Установка pygraphviz
+```bash
+  pip install pygraphviz \
+  --no-cache-dir \
+  --config-settings="--global-option=build_ext" \
+  --config-settings="--global-option=-I/opt/homebrew/opt/graphviz/include/" \
+  --config-settings="--global-option=-L/opt/homebrew/opt/graphviz/lib/"
+```
+
+
 # Запуск тестов
 `pytest -v`
 
