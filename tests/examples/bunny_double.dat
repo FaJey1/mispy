@@ -1,5 +1,5 @@
 #
-TITLE=""
+TITLE="bunny_double"
 VARIABLES="X", "Y", "Z", "M", "Id"
 ZONE T="ZONE 1"
 NODES=2503

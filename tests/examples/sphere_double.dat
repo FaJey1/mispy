@@ -1,5 +1,5 @@
 #
-TITLE=""
+TITLE="sphere_double"
 VARIABLES="X", "Y", "Z", "T", "Hw", "Hi", "HTC", "Beta", "TauX", "TauY", "TauZ", "Id"
 ZONE T="ZONE 1"
 NODES=1922

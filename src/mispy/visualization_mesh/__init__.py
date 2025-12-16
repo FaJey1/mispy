@@ -1,1 +1,2 @@
-from .main import *
+from .statistics import *
+from .visualization import *
