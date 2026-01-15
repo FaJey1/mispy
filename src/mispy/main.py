@@ -1,145 +1,99 @@
 import logging
 import time
-from yaspin import yaspin
-from yaspin.spinners import Spinners
+
+from tabulate import tabulate
 
 from mispy.extract_mesh import *
 from mispy.transform_mesh import *
-from mispy.visualization_mesh import *
-
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
-
-def measure_time(func, *args, **kwargs):
-    """
-    Измеряет время выполнения функции.
+from mispy.visualization_mesh.statistics import (
+    statistic_bvh_tree_graph,
+    statistic_mesh,
+    save_results,
+    visualization_results,
+    measure_time,
     
-    Параметры:
-        func: callable — функция для вызова
-        *args, **kwargs — аргументы для функции
-    
-    Возвращает:
-        tuple(result, elapsed_time)
-    """
-    start = time.time()
-    result = func(*args, **kwargs)
-    elapsed = time.time() - start
-    return result, elapsed
+)
 
 
-def alg(mesh: Mesh, split_func: str = "sah", esc_enable: bool = False, draw_aabb: bool = False, edge_enable: bool = False, faces_enable: bool = True, faces_to_fix_enable: bool = False, leaf_in_node = 1):
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
+
+
+def alg(mesh: Mesh, test_id: int, split_func: str = "sah",
+        esc_enable: bool = False, faces_in_node: int = 1):
+    """Запускает BVH алгоритм и возвращает результаты."""
     times = {}
-    bvh = BVHTree(mesh, leaf_in_node=1)
-    # --- prepare_mesh ---
-    with yaspin(Spinners.arc, text="Подготовка сетки...") as sp:
-        _, times["Время подготовки сетки"] = measure_time(bvh.prepare_mesh, esc_enable=False)
-        sp.ok("DONE")
+    bvh = BVHTree(mesh, faces_in_node=faces_in_node)
 
-    # --- build_tree ---
-    with yaspin(Spinners.arc, text=f"Построение BVH (split={split_func})...") as sp:
-        _, times["Время построения дерева"] = measure_time(bvh.build_tree, split_func=split_func)
-        sp.ok("DONE")
+    _, times["prepare"] = measure_time(bvh.prepare_mesh, esc_enable=esc_enable)
+    _, times["build"] = measure_time(bvh.build_tree, split_func=split_func)
+    _, times["traversal"] = measure_time(bvh.traversal_tree)
 
-    # --- traversal ---
-    with yaspin(Spinners.arc, text="Трассировка BVH...") as sp:
-        candidate_pairs, times["Время обхода дерева"] = measure_time(bvh.traversal_tree)
-        faces_to_fix = bvh.faces_to_fix
-        sp.ok("DONE")
-        
-    # --- triangulation ---
-    # with yaspin(Spinners.arc, text="Триангуляция 'сломанных' ячеек...") as sp:
-    #     times["Время триангуляции"] = measure_time()
-    #     sp.ok("DONE")
-
-    # --- build graph
     graph = bvh.build_graph(bvh.root_node)
-    
-    # --- Вывод результатов ---
+    bvh_table, bvh_stats = statistic_bvh_tree_graph(graph)
+    mesh_table, mesh_stats = statistic_mesh(mesh)
+
     table = [
         ["Функция разбиения", split_func],
-        ["Количество ячеек в листе", leaf_in_node],
+        ["Количество ячеек в листе", faces_in_node],
         ["Использование раннего разбиения", esc_enable],
-        ["Найдено пар ячеек для коррекции", len(faces_to_fix)],
+        ["Найдено пар ячеек для коррекции", len(bvh.faces_to_fix)],
     ]
     for name, t in times.items():
         table.append([name, f"{t:.6f} сек"])
 
-    logging.info("=== Результаты BVH алгоритма ===\n%s\n%s\n%s", 
-                 tabulate(
-                    table,
-                    headers=["Параметр", "Значение"],
-                    tablefmt="grid"
-                ),
-                statistic_bvh_tree_graph(graph),
-                statistic_mesh(mesh))
-    
-    #mesh_plotter(mesh=mesh, faces_enable=faces_enable, draw_aabb=draw_aabb, edge_enable=edge_enable, faces_to_fix = faces_to_fix, faces_to_fix_enable=faces_to_fix_enable)
-    #fix_face_plotter(mesh=mesh, faces_to_fix=faces_to_fix, stop_draw=1)
-    
-    #pairs_broken_face_plotter(candidate_pairs, stop_draw=1)
-    #pairs_plotter([(mesh.find_face_by_id(4838), mesh.find_face_by_id(4841))])
-    
+    logging.info("=== Результаты BVH алгоритма ===\n%s\n%s\n%s",
+                 tabulate(table, headers=["Параметр", "Значение"], tablefmt="grid"),
+                 bvh_table, mesh_table)
+
+    total_time = times["prepare"] + times["build"] + times["traversal"]
+
+    return {
+        "test_id": test_id,
+        "mesh": mesh.title,
+        "faces": mesh_stats["faces"],
+        "edges": mesh_stats["edges"],
+        "nodes": mesh_stats["nodes"],
+        "prepare_time": times["prepare"],
+        "build_time": times["build"],
+        "traversal_time": times["traversal"],
+        "total_time": total_time,
+        "split_func": split_func.upper(),
+        "esc": esc_enable,
+        "faces_in_node": faces_in_node,
+        "pairs_to_fix": len(bvh.faces_to_fix),
+        "bvh_vertices": bvh_stats["bvh_nodes"],
+        "bvh_edges": bvh_stats["bvh_edges"],
+        "bvh_depth": bvh_stats["bvh_depth"],
+        "bvh_balance": bvh_stats["bvh_balance"],
+    }
+
 
 def main():
-    mesh1 = Mesh("tests/examples/small_sphere_double.dat")
-    mesh2 = Mesh("tests/examples/sphere_double.dat")
-    mesh3 = Mesh("tests/examples/bunny_double.dat")
-    #mesh = Mesh("tests/examples/air_inlet_010000000000.dat")
-    tests = {
-        1: [
-            mesh1, False, "vah", 5],
-        2: [
-            mesh2, False, "vah", 5],
-        3: [
-            mesh3, False, "vah", 5],
-        4: [
-            mesh1, False, "vah", 1],
-        5: [
-            mesh2, False, "vah", 1],
-        6: [
-            mesh3, False, "vah", 1],
-        7: [
-            mesh1, False, "sah", 5],
-        8: [
-            mesh2, False, "sah", 5],
-        9: [
-            mesh3, False, "sah", 5],
-        10: [
-            mesh1, False, "sah", 1],
-        11: [
-            mesh2, False, "sah", 1],
-        12: [
-            mesh3, False, "sah", 1],
-        13: [
-            mesh1, True, "vah", 5],
-        14: [
-            mesh2, True, "vah", 5],
-        15: [
-            mesh3, True, "vah", 5],
-        16: [
-            mesh1, True, "vah", 1],
-        17: [
-            mesh2, True, "vah", 1],
-        18: [
-            mesh3, True, "vah", 1],
-        19: [
-            mesh1, True, "sah", 5],
-        20: [
-            mesh2, True, "sah", 5],
-        21: [
-            mesh3, True, "sah", 5],
-        22: [
-            mesh1, True, "sah", 1],
-        23: [
-            mesh2, True, "sah", 1],
-        24: [
-            mesh3, True, "sah", 1],
+    meshes = {
+        "small": Mesh("examples/small_sphere_double.dat"),
+        "sphere": Mesh("examples/sphere_double.dat"),
+        "bunny": Mesh("examples/bunny_double.dat"),
     }
-    for key in tests:
-        logging.info("=== ТЕСТ %s, СЕТКА %s ===", key, tests[key][0].title)
-        alg(mesh = tests[key][0], faces_enable = True, draw_aabb = False, esc_enable = tests[key][1], edge_enable = True, faces_to_fix_enable = True, split_func = tests[key][2], leaf_in_node = tests[key][3] )
-    #alg(mesh = mesh1, faces_enable = True, draw_aabb = False, esc_enable = False, edge_enable = True, faces_to_fix_enable = True, split_func = "vah", leaf_in_node = 5 )
+
+    tests = {
+        # --- small ---
+        1: ("small", False, "vah", 5),
+
+        # --- sphere ---
+        9:  ("sphere", False, "vah", 5),
+
+        # --- bunny ---
+        # 17: ("bunny", False, "vah", 5),
+    }
+
+    results = []
+    for test_id, (mesh_key, esc, split, leaf) in tests.items():
+        mesh = meshes[mesh_key]
+        logging.info("=== ТЕСТ %d, СЕТКА %s ===", test_id, mesh.title)
+        results.append(alg(mesh, test_id, split, esc, leaf))
+
+    save_results(results)
+    #visualization_results(results)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
+__pycache__/
 build/*
 .venv/*
-__pycache__/
-programm.py
+examples/*
+MESH_STRUCTURE_ANALYSIS.md

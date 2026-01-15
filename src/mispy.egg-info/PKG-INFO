@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: mispy
-Version: 0.0.2
-Summary: Package for delete in intersection mesh
+Version: 0.0.1
+Summary: Package for delete intersection in mesh
 Author-email: Alexey Rybakov <rybakov.aax@gmail.com>, Pavel Tsyngalev <ptsyngalev@gmail.com>
 Project-URL: Homepage, https://github.com/FaJey1/mispy
 Project-URL: Issues, https://github.com/FaJey1/mispy/issues
@@ -19,6 +19,8 @@ Requires-Dist: pytest>=7.0
 Requires-Dist: networkx
 Requires-Dist: pygraphviz
 Requires-Dist: yaspin
+Requires-Dist: tabulate
+Requires-Dist: pandas
 Dynamic: license-file
 
 # Настройка репозитория

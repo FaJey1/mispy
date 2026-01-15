@@ -1,14 +1,11 @@
 import logging
-
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 
-from .statistics import *
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 def draw_face(ax,
               faces_coord=[],
@@ -22,7 +19,7 @@ def draw_face(ax,
         faces_coord,
         alpha=alpha,
         facecolors=colors if colors else default_color,
-        edgecolors="k" if edge_enable else "none",
+        edgecolors="black" if edge_enable else "none",
         linewidths=0.3 if edge_enable else 0.0
     )
     ax.add_collection3d(poly_collection)
@@ -138,20 +135,20 @@ def mesh_plotter(mesh,
             #if face.glo_id in [4838, 4841]:
             coords = np.array([node.p for node in mesh.find_face_by_id(face_id).nodes])
             polys.append(coords)
-    draw_face(ax = ax, faces_coord = polys,alpha = alpha)
+    draw_face(ax = ax, faces_coord = polys,alpha = alpha, edge_enable = edge_enable if not faces_enable else False)
     # Оси и подпись
     ax.set_title(mesh.title)
-    data = statistic_mesh(mesh=mesh)
+    # data = statistic_mesh(mesh=mesh)
 
-    table = ax.table(
-        cellText=data,
-        loc="bottom",
-        cellLoc="center",
-    )
+    # table = ax.table(
+    #     cellText=data,
+    #     loc="bottom",
+    #     cellLoc="center",
+    # )
 
-    table.scale(1, 1.2)
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
+    # table.scale(1, 1.2)
+    # table.auto_set_font_size(False)
+    # table.set_fontsize(10)
     
     ax.set_xlabel('X')
     ax.set_ylabel('Y')

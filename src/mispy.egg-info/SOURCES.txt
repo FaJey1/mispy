@@ -11,6 +11,11 @@ src/mispy.egg-info/top_level.txt
 src/mispy/extract_mesh/__init__.py
 src/mispy/extract_mesh/msu.py
 src/mispy/transform_mesh/__init__.py
+src/mispy/transform_mesh/bvh_tree.py
+src/mispy/transform_mesh/czech_classify.py
 src/mispy/transform_mesh/main.py
+src/mispy/transform_mesh/triangulator.py
 src/mispy/visualization_mesh/__init__.py
 src/mispy/visualization_mesh/main.py
+src/mispy/visualization_mesh/statistics.py
+src/mispy/visualization_mesh/visualization.py

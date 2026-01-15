@@ -3,12 +3,12 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "mispy"
-version = "0.0.2"
+version = "0.0.1"
 authors = [
   { name="Alexey Rybakov", email="rybakov.aax@gmail.com" },
   { name="Pavel Tsyngalev", email="ptsyngalev@gmail.com" }
 ]
-description = "Package for delete in intersection mesh"
+description = "Package for delete intersection in mesh"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
@@ -26,6 +26,7 @@ dependencies = [
     "pygraphviz",
     "yaspin",
     "tabulate",
+    "pandas",
 ]
 
 [project.urls]
