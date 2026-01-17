@@ -15,7 +15,7 @@ from mispy.visualization_mesh.statistics import (
 )
 
 
-logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
+#logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
 def alg(mesh: Mesh, test_id: int, split_func: str = "sah",

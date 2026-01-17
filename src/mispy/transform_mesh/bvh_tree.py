@@ -12,199 +12,6 @@ from .czech_classify import CzechClassify
 # Настройка логирования для этого модуля
 # Используем getLogger вместо basicConfig, чтобы не конфликтовать с другими модулями
 logger = logging.getLogger(__name__)
-#     # ----------------------------------------------------------------------------------
-
-#     def traversal_tree(self) -> Dict[int, Dict[str, Tuple[Face, Face]]]:
-#         """
-#         Обход BVH‑дерева и поиск пар граней, AABB которых пересекаются.
-
-#         Возвращает
-#         ----------
-#         dict
-#             Словарь вида:
-#             {
-#                 pair_index: {
-#                     "faces": (face1, face2)
-#                 },
-#                 ...
-#             }
-#         """
-
-#         if self.root_node is None:
-#             raise RuntimeError("BVH: tree is not built. Call build_tree() first.")
-
-#         logging.info("BVH: traversal_tree started")
-#         checked_pairs: set = set()
-
-#         stack: List[Tuple[BVHNode, BVHNode]] = [(self.root_node, self.root_node)]
-
-#         while stack:
-#             node_a, node_b = stack.pop()
-
-#             a_min, a_max = node_a.bounding_box
-#             b_min, b_max = node_b.bounding_box
-
-#             if not _aabb_intersect(a_min, a_max, b_min, b_max):
-#                 continue
-
-#             # Оба листа — перебираем пары граней
-#             if node_a.is_leaf and node_b.is_leaf:
-#                 for f1 in node_a.faces:
-#                     for f2 in node_b.faces:
-#                         if f1 is f2:
-#                             continue
-#                         key = tuple(sorted((f1.glo_id, f2.glo_id)))
-#                         if key in checked_pairs:
-#                             continue
-#                         checked_pairs.add(key)
-
-#                         # Дополнительная проверка AABB на уровне примитивов
-#                         coords1 = np.array([n.p for n in f1.nodes], dtype=float)
-#                         coords2 = np.array([n.p for n in f2.nodes], dtype=float)
-#                         f1_min, f1_max = coords1.min(axis=0), coords1.max(axis=0)
-#                         f2_min, f2_max = coords2.min(axis=0), coords2.max(axis=0)
-
-#                         if not _aabb_intersect(f1_min, f1_max, f2_min, f2_max):
-#                             continue
-
-#                         # Пропускаем пары с общими вершинами (соседние грани)
-#                         f1_vertex_ids = {n.glo_id for n in f1.nodes}
-#                         f2_vertex_ids = {n.glo_id for n in f2.nodes}
-#                         shared_vertices = f1_vertex_ids & f2_vertex_ids
-#                         # Пропускаем, если есть общее ребро (>=2 общих вершины)
-#                         if len(shared_vertices) >= 2:
-#                             continue
-
-#                         idx = len(self.candidate_pairs)
-#                         self.candidate_pairs[idx] = {"faces": (f1, f2)}
-                        
-#                         # Геометрическая проверка пересечения через CzechClassify
-#                         try:
-#                             classifier = CzechClassify((f1, f2))
-#                             has_intersection, intersection_result = classifier.classify()
-                            
-#                             # Обрабатываем результат пересечения
-#                             # classify() может вернуть:
-#                             # - (False, []) - нет пересечения
-#                             # - (False, seg) - копланарный случай, seg = [p1, p2] или None
-#                             # - (True, points) - есть пересечение, список точек
-#                             # - (False/str, pts) - impossible case после recheck
-                            
-#                             segment = None
-                            
-#                             if intersection_result and len(intersection_result) > 0:
-#                                 # Преобразуем точки в numpy массивы
-#                                 points_array = []
-#                                 for pt in intersection_result:
-#                                     if isinstance(pt, np.ndarray):
-#                                         points_array.append(pt.copy())
-#                                     else:
-#                                         points_array.append(np.array(pt, dtype=float))
-                                
-#                                 # Если точек больше 2, берем крайние (для отрезка нужно 2 точки)
-#                                 if len(points_array) == 1:
-#                                     # Одна точка - создаем вырожденный отрезок
-#                                     segment = [points_array[0], points_array[0]]
-#                                 elif len(points_array) == 2:
-#                                     # Две точки - это уже отрезок
-#                                     segment = [points_array[0], points_array[1]]
-#                                 else:
-#                                     # Больше 2 точек - находим крайние точки
-#                                     pts = np.array(points_array)
-#                                     # Вычисляем попарные расстояния
-#                                     n = len(pts)
-#                                     max_dist = -1
-#                                     i_max, j_max = 0, 0
-#                                     for i in range(n):
-#                                         for j in range(i + 1, n):
-#                                             dist = np.linalg.norm(pts[i] - pts[j])
-#                                             if dist > max_dist:
-#                                                 max_dist = dist
-#                                                 i_max, j_max = i, j
-#                                     segment = [pts[i_max].copy(), pts[j_max].copy()]
-                            
-#                             # Добавляем отрезок пересечения для обеих граней, если он найден
-#                             if segment is not None and has_intersection:
-#                                 f1_id = f1.glo_id
-#                                 f2_id = f2.glo_id
-                                
-#                                 self.faces_to_fix[f1_id].append(segment)
-#                                 self.faces_to_fix[f2_id].append(segment)
-                                
-#                                 logging.debug(
-#                                     "BVH: intersection found between faces %d and %d, segment added",
-#                                     f1_id,
-#                                     f2_id,
-#                                 )
-#                         except Exception as e:
-#                             logging.warning(
-#                                 "BVH: error during CzechClassify for faces %d and %d: %s",
-#                                 f1.glo_id,
-#                                 f2.glo_id,
-#                                 str(e),
-#                             )
-
-#                 continue
-
-#             # Раскрываем один или оба внутренних узла
-#             if node_a.is_leaf and not node_b.is_leaf:
-#                 for child in node_b.children:
-#                     if child is not None:
-#                         stack.append((node_a, child))
-#             elif not node_a.is_leaf and node_b.is_leaf:
-#                 for child in node_a.children:
-#                     if child is not None:
-#                         stack.append((child, node_b))
-#             else:
-#                 # оба внутренние
-#                 for child_a in node_a.children:
-#                     for child_b in node_b.children:
-#                         if child_a is not None and child_b is not None:
-#                             stack.append((child_a, child_b))
-
-#         logging.info(
-#             "BVH: traversal_tree finished; candidate_pairs=%d, faces_to_fix=%d, checked_pairs=%d",
-#             len(self.candidate_pairs),
-#             len(self.faces_to_fix),
-#             len(checked_pairs),
-#         )
-#         logging.debug("Values in checked_pairs=%s", checked_pairs)
-#         return self.candidate_pairs
-
-#     # ----------------------------------------------------------------------------------
-
-#     def build_graph(self, root: Optional[BVHNode] = None) -> nx.DiGraph:
-#         """
-#         Строит orientированный граф BVH‑дерева для последующей визуализации.
-#         """
-
-#         if root is None:
-#             if self.root_node is None:
-#                 raise RuntimeError("BVH: tree is not built. Call build_tree() first.")
-#             root = self.root_node
-
-#         graph = nx.DiGraph()
-
-#         def _dfs(node: BVHNode) -> None:
-#             graph.add_node(
-#                 node.node_id,
-#                 label=str(node.node_id),
-#                 is_leaf=node.is_leaf,
-#             )
-#             for child in node.children:
-#                 if child is not None:
-#                     graph.add_edge(node.node_id, child.node_id)
-#                     _dfs(child)
-
-#         _dfs(root)
-
-#         logging.info(
-#             "BVH: build_graph finished; nodes=%d, edges=%d",
-#             graph.number_of_nodes(),
-#             graph.number_of_edges(),
-#         )
-
-#         return graph
 
 def _aabb_empty() -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -402,8 +209,8 @@ class BVHNode:
     Узел BVH-дерева.
     
     Используется для представления узла в иерархической структуре BVH.
-    Листовые узлы (is_leaf=True) содержат список граней (faces), которые
-    находятся внутри их ограничивающего бокса (bounding_box).
+    Листовые узлы (is_leaf=True) содержат список примитивов (primitives),
+    которые находятся внутри их ограничивающего бокса (bounding_box).
     Внутренние узлы (is_leaf=False) содержат два дочерних узла (children),
     которые разделяют пространство по выбранной оси разбиения.
     
@@ -417,8 +224,11 @@ class BVHNode:
         Ограничивающий бокс узла в формате (bb_min, bb_max), где
         bb_min - минимальные координаты по осям X, Y, Z,
         bb_max - максимальные координаты по осям X, Y, Z.
-    faces : List[Face]
-        Список граней, содержащихся в узле (только для листовых узлов).
+    primitives : List[PrimitiveRef]
+        Список примитивов (PrimitiveRef), содержащихся в узле (только для листовых узлов).
+        Каждый PrimitiveRef содержит грань (face), её AABB (bb_min, bb_max) и
+        координаты вершин (nodes_coords) для быстрого доступа без пересчёта.
+        Для доступа к грани используется primitives[i].face.
     children : Tuple[Optional[BVHNode], Optional[BVHNode]]
         Кортеж из двух дочерних узлов (left_child, right_child).
         Для листовых узлов оба значения равны None.
@@ -426,7 +236,7 @@ class BVHNode:
     node_id: int
     is_leaf: bool
     bounding_box: Tuple[np.ndarray, np.ndarray,]
-    faces: List[Face] = field(default_factory=list)
+    primitives: List["PrimitiveRef"] = field(default_factory=list)
     children: Tuple[Optional["BVHNode"], Optional["BVHNode"]] = (None, None)
 
 
@@ -436,9 +246,9 @@ class PrimitiveRef:
     Обёртка над гранью и её AABB, чтобы каждый раз не пересчитывать bbox.
     
     Используется при построении BVH-дерева для хранения грани вместе с
-    предвычисленным ограничивающим боксом (AABB). Это позволяет избежать
-    многократного пересчёта AABB для одной и той же грани при сортировке
-    и оценке разбиений по разным осям (X, Y, Z).
+    предвычисленным ограничивающим боксом (AABB) и координатами вершин.
+    Это позволяет избежать многократного пересчёта AABB и извлечения координат
+    для одной и той же грани при сортировке, оценке разбиений и обходе дерева.
     
     Attributes
     ----------
@@ -448,11 +258,17 @@ class PrimitiveRef:
         Минимальные координаты AABB грани по осям X, Y, Z.
     bb_max : np.ndarray
         Максимальные координаты AABB грани по осям X, Y, Z.
+    nodes_coords : np.ndarray
+        Массив координат вершин грани в формате (3, 3), где каждая строка
+        содержит координаты одной вершины (x, y, z). Используется для
+        быстрого доступа к координатам без обращения к face.nodes[i].p
+        при обходе дерева и проверке пересечений.
     """
 
     face: Face
     bb_min: np.ndarray
     bb_max: np.ndarray
+    nodes_coords: np.ndarray
 
 @dataclass
 class SplitResult:
@@ -649,7 +465,9 @@ class BVHTree:
         # Каждый отрезок - это список из 2 точек (np.ndarray)
         self.faces_to_fix: Dict[int, Tuple[Face, List[List[np.ndarray]]]] = {}
         # Пары полученные в результате обхода дерева
-        self.candidate_pairs: Dict[int, Dict[str, Tuple[Face, Face]]] = {}
+        self.candidate_pairs: Dict[int, Tuple[Face, Face]] = {}
+        self.candidate_pairs_after_czech: Dict[int, Tuple[Face, Face]] = {}
+        self.impossible_couples: Dict[int, List[Tuple[Face, Face]]] = {}
         
         # Подготовленные примитивы (заполняются в prepare_mesh)
         self._primitives: List[PrimitiveRef] = []
@@ -687,8 +505,8 @@ class BVHTree:
         - После цикла mesh_bb_min и mesh_bb_max содержат общий AABB всей сетки,
           так как _aabb_include возвращает расширенный AABB, включающий все предыдущие грани
         """
-        logging.info(
-                "BVH: prepare_mesh started (ESC enabled: %s), faces=%d",
+        logger.info(
+                "BVHTree: prepare_mesh started (ESC enabled: %s), faces=%d",
                 esc_enable,
                 len(self.mesh.faces),
             )
@@ -699,15 +517,15 @@ class BVHTree:
             coords = np.array([node.p for node in face.nodes], dtype=float)
             bb_min = coords.min(axis=0)
             bb_max = coords.max(axis=0)
-            self._primitives.append(PrimitiveRef(face=face, bb_min=bb_min, bb_max=bb_max))
+            self._primitives.append(PrimitiveRef(face=face, bb_min=bb_min, bb_max=bb_max, nodes_coords=coords))
             # Итеративно расширяем общий AABB, включая AABB текущей грани
             # После цикла mesh_bb_min и mesh_bb_max будут содержать общий AABB всей сетки
             mesh_bb_min, mesh_bb_max = _aabb_include(mesh_bb_min, mesh_bb_max, bb_min, bb_max)
         
         self._mesh_bb_min = mesh_bb_min
         self._mesh_bb_max = mesh_bb_max
-        logging.info(
-                    "BVH: prepare_mesh finished; primitives=%d, mesh_bb_min=%s, mesh_bb_max=%s",
+        logger.info(
+                    "BVHTree: prepare_mesh finished; primitives=%d, mesh_bb_min=%s, mesh_bb_max=%s",
                     len(self._primitives),
                     self._mesh_bb_min,
                     self._mesh_bb_max,
@@ -768,7 +586,7 @@ class BVHTree:
         if split_func not in ("sah", "vah"):
             raise ValueError(f"Unsupported split_func '{split_func}', expected 'sah' or 'vah'.")
         
-        logging.info("BVH: build_tree started with split_func='%s'", split_func)
+        logger.info("BVHTree: build_tree started with split_func='%s'", split_func)
         
         # Инициализируем три списка, отсортированных по vmax AABB вдоль каждой оси
         # Сортировка по максимальной координате (vmax) используется для эффективного
@@ -791,8 +609,8 @@ class BVHTree:
             depth=0,  # Корневой узел всегда имеет глубину 0
         )
 
-        logging.info(
-            "BVH: build_tree finished; total_nodes=%d, root_id=%s",
+        logger.info(
+            "BVHTree: build_tree finished; total_nodes=%d, root_id=%s",
             len(self.nodes),
             self.root_node.node_id if self.root_node else None,
         )
@@ -886,13 +704,13 @@ class BVHTree:
           так как списки отсортированы по другим осям и прямой срез по индексу не даст
           правильного разбиения.
         
-        Внутренние узлы и faces=[]:
-        Внутренние узлы (is_leaf=False) имеют faces=[], потому что:
-        - Внутренние узлы не содержат грани напрямую, они содержат только дочерние узлы (children).
-        - Грани хранятся только в листовых узлах (is_leaf=True).
+        Внутренние узлы и primitives=[]:
+        Внутренние узлы (is_leaf=False) имеют primitives=[], потому что:
+        - Внутренние узлы не содержат примитивы напрямую, они содержат только дочерние узлы (children).
+        - Примитивы (PrimitiveRef) хранятся только в листовых узлах (is_leaf=True).
         - Это стандартная структура BVH-дерева: листья содержат примитивы,
           внутренние узлы содержат только структуру разбиения пространства.
-        - Все грани, которые попадают в область внутреннего узла, распределяются
+        - Все примитивы, которые попадают в область внутреннего узла, распределяются
           между его дочерними узлами при рекурсивном построении.
         """
         # Проверяем, что все три списка содержат одинаковое количество примитивов
@@ -915,13 +733,13 @@ class BVHTree:
                 bb_min=bb_min,
                 bb_max=bb_max,
                 is_leaf=True,
-                faces=[p.face for p in plist_x],
+                primitives=plist_x.copy(),  # Копируем список примитивов для листового узла
             )
-            logging.debug(
-                "BVH: created leaf node %d at depth=%d with %d faces",
+            logger.debug(
+                "BVHTree: created leaf node %d at depth=%d with %d primitives",
                 node.node_id,
                 depth,
-                len(node.faces),
+                len(node.primitives),
             )
             return node
 
@@ -942,13 +760,13 @@ class BVHTree:
                     bb_min=bb_min,
                     bb_max=bb_max,
                     is_leaf=True,
-                    faces=[p.face for p in plist_x],
+                    primitives=plist_x.copy(),  # Копируем список примитивов для листового узла
                 )
-                logging.debug(
-                    "BVH: SAH/VAH subdivision not profitable; created leaf node %d at depth=%d with %d faces, split.subdivide_next=%s",
+                logger.debug(
+                    "BVHTree: SAH/VAH subdivision not profitable; created leaf node %d at depth=%d with %d primitives, split.subdivide_next=%s",
                     node.node_id,
                     depth,
-                    len(node.faces),
+                    len(node.primitives),
                     split.subdivide_next,
                 )
                 return node
@@ -961,15 +779,15 @@ class BVHTree:
                     bb_min=bb_min,
                     bb_max=bb_max,
                     is_leaf=True,
-                    faces=[p.face for p in plist_x],
+                    primitives=plist_x.copy(),  # Копируем список примитивов для листового узла
                 )
-                logging.warning(
-                    "BVH: no split found but count=%d > faces_in_node=%d; created leaf node %d at depth=%d with %d faces",
+                logger.debug(
+                    "BVHTree: no split found but count=%d > faces_in_node=%d; created leaf node %d at depth=%d with %d primitives",
                     count,
                     self.faces_in_node,
                     node.node_id,
                     depth,
-                    len(node.faces),
+                    len(node.primitives),
                 )
                 return node
             
@@ -982,8 +800,8 @@ class BVHTree:
                 # Это необходимо для соблюдения ограничения faces_in_node
                 axis = split.axis
                 index = split.index
-                logging.debug(
-                    "BVH: using SAH split despite not profitable (count=%d > faces_in_node=%d); axis=%d, index=%d at depth=%d",
+                logger.debug(
+                    "BVHTree: using SAH split despite not profitable (count=%d > faces_in_node=%d); axis=%d, index=%d at depth=%d",
                     count,
                     self.faces_in_node,
                     axis,
@@ -1047,18 +865,18 @@ class BVHTree:
             left_x, right_x = split_other_list(plist_x, left_face_ids)
             left_y, right_y = split_other_list(plist_y, left_face_ids)
         
-        # Создаём внутренний узел (is_leaf=False) с пустым списком граней
-        # Внутренние узлы не содержат грани напрямую, они содержат только дочерние узлы
-        # Все грани, попадающие в область этого узла, будут распределены между дочерними узлами
+        # Создаём внутренний узел (is_leaf=False) с пустым списком примитивов
+        # Внутренние узлы не содержат примитивы напрямую, они содержат только дочерние узлы
+        # Все примитивы, попадающие в область этого узла, будут распределены между дочерними узлами
         node = self._create_node(
             bb_min=bb_min,
             bb_max=bb_max,
             is_leaf=False,
-            faces=[],  # Внутренние узлы не содержат грани, только дочерние узлы
+            primitives=[],  # Внутренние узлы не содержат примитивы, только дочерние узлы
         )
 
-        logging.debug(
-            "BVH: internal node %d at depth=%d; axis=%d, index=%d, left_count=%d, right_count=%d",
+        logger.debug(
+            "BVHTree: internal node %d at depth=%d; axis=%d, index=%d, left_count=%d, right_count=%d",
             node.node_id,
             depth,
             axis,
@@ -1097,7 +915,7 @@ class BVHTree:
         bb_min: np.ndarray,
         bb_max: np.ndarray,
         is_leaf: bool,
-        faces: List[Face],
+        primitives: List[PrimitiveRef],
     ) -> BVHNode:
         """
         Создаёт новый узел BVH-дерева и добавляет его в список узлов.
@@ -1114,8 +932,9 @@ class BVHTree:
             Максимальные координаты ограничивающего бокса узла по осям X, Y, Z.
         is_leaf : bool
             Флаг, указывающий, является ли узел листовым (True) или внутренним (False).
-        faces : List[Face]
-            Список граней, содержащихся в узле. Для листовых узлов содержит грани,
+        primitives : List[PrimitiveRef]
+            Список примитивов (PrimitiveRef), содержащихся в узле. Для листовых узлов
+            содержит примитивы с предвычисленными AABB и координатами вершин,
             для внутренних узлов должен быть пустым списком ([]).
         
         Returns
@@ -1129,15 +948,16 @@ class BVHTree:
           текущего значения nodes_counter, после чего счётчик увеличивается на 1.
         - Узел автоматически добавляется в список self.nodes для последующего
           доступа и анализа структуры дерева.
-        - Для внутренних узлов (is_leaf=False) параметр faces должен быть пустым
-          списком, так как внутренние узлы содержат только дочерние узлы, а не грани.
+        - Для внутренних узлов (is_leaf=False) параметр primitives должен быть пустым
+          списком, так как внутренние узлы содержат только дочерние узлы, а не примитивы.
+        - Для доступа к грани из примитива используется primitives[i].face.
         """
         # Создаём узел с уникальным идентификатором на основе текущего счётчика
         node = BVHNode(
             node_id=self.nodes_counter,
             bounding_box=(bb_min, bb_max),
             is_leaf=is_leaf,
-            faces=faces,
+            primitives=primitives,
         )
         # Увеличиваем счётчик для следующего узла
         self.nodes_counter += 1
@@ -1329,8 +1149,8 @@ class BVHTree:
             best_left_min, best_left_max = node_bb_min, node_bb_max
             best_right_min, best_right_max = node_bb_min, node_bb_max
             
-        logging.debug(
-            "BVH: _find_object_split metric=%s, primitives=%d, best_axis=%d, "
+        logger.debug(
+            "BVHTree: _find_object_split metric=%s, primitives=%d, best_axis=%d, "
             "best_index=%d, best_cost=%.6f, subdivide_next=%s",
             metric,
             primitives_count,
@@ -1424,8 +1244,8 @@ class BVHTree:
         # Начинаем обход дерева с корневого узла
         _dfs(root)
 
-        logging.info(
-            "BVH: build_graph finished; nodes=%d, edges=%d",
+        logger.info(
+            "BVHTree: build_graph finished; nodes=%d, edges=%d",
             graph.number_of_nodes(),
             graph.number_of_edges(),
         )
@@ -1434,9 +1254,392 @@ class BVHTree:
     
     # ----------------------------------------------------------------------------------    
     
-    def traversal_tree(self):
-        pass
+    def traversal_tree(self) -> Dict[int, Tuple[Face, List[List[Node]]]]:
+        """
+        Выполняет обход BVH дерева для поиска пересечений граней между собой.
+        
+        Метод является основным алгоритмом для обнаружения самопересечений сетки.
+        Он использует пространственную структуру BVH дерева для эффективного
+        отсеивания заведомо непересекающихся пар граней, а затем применяет
+        точный геометрический алгоритм CzechClassify для проверки пересечений.
+        
+        Алгоритм состоит из двух основных этапов:
+        
+        1. **Обход BVH дерева с проверкой AABB пересечений**:
+           - Использует итеративный обход с помощью стека
+           - Начинает с пары (root_node, root_node) для проверки всех пар граней
+           - Для каждой пары узлов проверяет пересечение их AABB
+           - Если AABB не пересекаются, поддерево пропускается
+           - Когда оба узла - листья, перебирает все пары примитивов (граней) в них
+        
+        2. **Геометрическая проверка пересечений через CzechClassify**:
+           - Для каждой пары граней из листовых узлов применяет CzechClassify
+           - Фильтрует пары граней-соседей (имеющих общее ребро)
+           - Выполняет дополнительную проверку AABB на уровне примитивов
+           - При обнаружении пересечения добавляет сегмент пересечения в faces_to_fix
+        
+        3. **Обработка невозможных случаев через neighbor tracing**:
+           - Если классификация попадает в невозможный случай (impossible case),
+             пара сохраняется для последующей обработки
+           - После основного обхода проверяются соседние грани для пар из impossible cases
+           - Согласно теории Czech алгоритма, граница пересечения продолжается через
+             соседние треугольники, поэтому проверяются пары (сосед face_a, face_b)
+             и (face_a, сосед face_b)
+        
+        Returns
+        -------
+        Dict[int, Tuple[Face, List[List[Node]]]]
+            Словарь с гранями, имеющими пересечения, и их сегментами пересечения:
+            - Ключ: int - идентификатор грани (face.glo_id)
+            - Значение: Tuple[Face, List[List[Node]]] - кортеж из грани и списка
+              сегментов пересечения. Каждый сегмент - это список из 2 объектов Node
+              (или 1 Node, дублированного для точки касания)
+        
+        Raises
+        ------
+        RuntimeError
+            Если BVH дерево не построено (self.root_node is None). Необходимо сначала
+            вызвать build_tree().
+        
+        ValueError
+            Если CzechClassify обнаружил пересечение (has_intersection = True),
+            но intersection_result пустой. Это недопустимая ситуация, указывающая
+            на ошибку в логике CzechClassify.
+        
+        Notes
+        -----
+        Метод использует множество checked_pairs для избежания дублирования проверок:
+        - Пары хранятся как кортежи из отсортированных glo_id граней: (min_id, max_id)
+        - Это гарантирует, что пара (a, b) и (b, a) проверяются только один раз
+        
+        Метод также использует фильтрацию пар граней-соседей через _is_neighbour():
+        - Грани-соседи (имеющие общее ребро) не проверяются на пересечение,
+          так как они по определению не могут пересекаться (кроме как по границе)
+        
+        Обработка impossible cases:
+        - Пары граней, попавшие в impossible cases классификации (например, '001', '002'),
+          сохраняются в _impossible_pairs_queue для последующей обработки
+        - После основного цикла эти пары обрабатываются через проверку соседних граней
+        - Это реализация neighbor tracing согласно теории Czech алгоритма
+        
+        Examples
+        --------
+        >>> bvh = BVHTree(mesh, faces_in_node=1)
+        >>> bvh.prepare_mesh(esc_enable=False)
+        >>> bvh.build_tree(split_func="sah")
+        >>> faces_to_fix = bvh.traversal_tree()
+        >>> print(f"Found {len(faces_to_fix)} faces with intersections")
+        """
+        
+        # Проверка на построение BVH дерева
+        # Метод требует, чтобы дерево было построено заранее через build_tree()
+        if self.root_node is None:
+            raise RuntimeError("BVH: tree is not built. Call build_tree() first.")
 
+        logger.info("BVHTree: traversal_tree started")
+        
+        # Множество проверенных пар граней для избежания дублирования проверок
+        # Хранит кортежи из отсортированных glo_id граней: (min_id, max_id)
+        # Это гарантирует, что пара (a, b) и (b, a) проверяются только один раз
+        checked_pairs: set = set()
+        # Счётчик обращений к checked_pairs (для статистики и отладки)
+        checked_pairs_count = 0
+        
+        # Стек для итеративного обхода BVH дерева
+        # Содержит пары узлов (node_a, node_b) для проверки пересечения их AABB
+        # Начинаем с пары (root_node, root_node) для проверки всех пересечений в дереве
+        # Алгоритм: если AABB двух узлов пересекаются, добавляем их дочерние узлы в стек
+        stack: List[Tuple[BVHNode, BVHNode]] = [(self.root_node, self.root_node)]
+        
+        # Основной цикл обхода дерева
+        # Итеративно обрабатываем пары узлов из стека до его опустошения
+        while stack:
+            node_a, node_b = stack.pop()
+
+            # Получаем AABB (Axis-Aligned Bounding Box) для обоих узлов
+            # AABB используется для быстрого отсеивания заведомо непересекающихся пар
+            a_min, a_max = node_a.bounding_box
+            b_min, b_max = node_b.bounding_box
+
+            # Проверка пересечения AABB узлов
+            # Если AABB не пересекаются, то грани в поддеревьях заведомо не пересекаются
+            # и можно пропустить всю ветку дерева
+            if not _aabb_intersect(a_min, a_max, b_min, b_max):
+                logger.debug("BVHTree: node_a: %d, node_b: %d has't intersection, skip check", node_a.node_id, node_b.node_id)
+                continue
+            
+            logger.debug("BVHTree: node_a: %d, node_b: %d has intersection, start check", node_a.node_id, node_b.node_id)
+            
+            # --- Случай 1: Оба узла - листья ---
+            # В листовых узлах хранятся примитивы (PrimitiveRef), содержащие грани
+            # Перебираем все пары примитивов из обоих листовых узлов
+            if node_a.is_leaf and node_b.is_leaf:
+                # Перебираем все пары примитивов из листовых узлов
+                # Каждый примитив (PrimitiveRef) содержит ссылку на грань (Face)
+                for p1 in node_a.primitives:
+                    for p2 in node_b.primitives:
+                        # Получаем грани из примитивов
+                        f1, f2 = p1.face, p2.face
+                        
+                        # --- Фильтрация 1: Проверка на совпадение граней ---
+                        # Если грани совпадают (в разных листьях оказалась одна и та же грань),
+                        # пропускаем эту пару, так как грань не может пересекаться сама с собой
+                        if f1 is f2:
+                            logger.debug("BVHTree: node_a: %d, node_b: %d, f1: %d is f2: %d", node_a.node_id, node_b.node_id, f1.glo_id, f2.glo_id)
+                            continue
+                        
+                        # Формируем ключ пары из отсортированных идентификаторов граней
+                        # Это гарантирует, что пара (a, b) и (b, a) имеют одинаковый ключ
+                        key = tuple(sorted((f1.glo_id, f2.glo_id)))
+                        
+                        # --- Фильтрация 2: Проверка на дублирование пар ---
+                        # Если такая пара уже проверялась ранее, пропускаем её
+                        # Это происходит, когда одна и та же пара граней попадает в разные листовые узлы
+                        if key in checked_pairs:
+                            logger.debug("BVHTree: node_a: %d, node_b: %d, count call to checked_pairs_count, %d", node_a.node_id, node_b.node_id, checked_pairs_count)
+                            checked_pairs_count += 1
+                            continue
+                        
+                        # Добавляем ключ проверенной пары в множество checked_pairs
+                        # Это гарантирует, что пара не будет проверяться повторно
+                        checked_pairs.add(key)
+                        
+                        # --- Фильтрация 3: Проверка на соседей ---
+                        # Грани-соседи (имеющие общее ребро) не проверяются на пересечение,
+                        # так как они по определению не могут пересекаться (кроме как по границе ребра)
+                        # Соседние грани должны быть обработаны другими механизмами
+                        if _is_neighbour(f1, f2):
+                            logger.debug("BVHTree: node_a: %d, node_b: %d, f1: %d, f2: %d is neighbour, skip pair", node_a.node_id, node_b.node_id, f1.glo_id, f2.glo_id)
+                            continue
+                        
+                        # --- Фильтрация 4: Дополнительная проверка AABB на уровне примитивов ---
+                        # Хотя AABB узлов пересекаются, AABB отдельных граней могут не пересекаться
+                        # Используем предвычисленные AABB из PrimitiveRef (bb_min, bb_max),
+                        # которые были вычислены в prepare_mesh(), вместо пересчёта
+                        f1_min, f1_max = p1.bb_min, p1.bb_max
+                        f2_min, f2_max = p2.bb_min, p2.bb_max
+                        if not _aabb_intersect(f1_min, f1_max, f2_min, f2_max):
+                            logger.debug("BVHTree: node_a: %d, node_b: %d, check intersection for f1: %d, f2: %d", node_a.node_id, node_b.node_id, f1.glo_id, f2.glo_id)
+                            continue
+                        
+                        # --- Пары прошли все фильтры - добавляем в кандидаты ---
+                        # Пара граней является кандидатом на пересечение и будет проверена
+                        # через точный геометрический алгоритм CzechClassify
+                        idx = len(self.candidate_pairs)
+                        self.candidate_pairs[idx] = (f1, f2)
+                        logger.debug("BVHTree: Added new candidate pair {%d: (%d, %d)}", idx, f1.glo_id, f2.glo_id)
+                        
+                        # --- Геометрическая проверка пересечения через CzechClassify ---
+                        # CzechClassify использует edge-plane intersection для классификации
+                        # пересечения двух треугольников согласно теории Czech алгоритма
+                        # Метод get_intersection() возвращает:
+                        # - has_intersection: True если найдено пересечение, False иначе
+                        # - intersection_result: список из 2 объектов Node (сегмент пересечения)
+                        # - impossible_couple: список пар граней, попавших в impossible cases
+                        czc = CzechClassify(candidates=(f1, f2), checked_pairs=checked_pairs, pair_index=idx)
+                        has_intersection, intersection_result, impossible_couple = czc.get_intersection()
+                        
+                        # --- Обработка результата пересечения ---
+                        if has_intersection:
+                            # Пересечение найдено - добавляем сегмент пересечения к обеим граням
+                            # intersection_result содержит список из 2 объектов Node (сегмент пересечения)
+                            # или [Node, Node] с одинаковыми координатами для точки касания
+                            
+                            # Проверка на ошибку: если has_intersection = True,
+                            # intersection_result не должен быть пустым
+                            if not intersection_result:
+                                raise ValueError("has_intersection = True and intersection_result None is impossible case, need to check this")
+                            
+                            # Инициализируем запись в faces_to_fix для f1, если её ещё нет
+                            if f1.glo_id not in self.faces_to_fix:
+                                self.faces_to_fix[f1.glo_id] = (f1, [])
+
+                            # Инициализируем запись в faces_to_fix для f2, если её ещё нет
+                            if f2.glo_id not in self.faces_to_fix:
+                                self.faces_to_fix[f2.glo_id] = (f2, [])
+
+                            # Добавляем сегмент пересечения к обеим граням
+                            # intersection_result - это список из 2 объектов Node, представляющий сегмент
+                            self.faces_to_fix[f1.glo_id][1].append(intersection_result)
+                            self.faces_to_fix[f2.glo_id][1].append(intersection_result)
+                            
+                            # Сохраняем пару граней, для которых найдено пересечение
+                            # для последующего анализа и визуализации
+                            idx = len(self.candidate_pairs_after_czech)
+                            self.candidate_pairs_after_czech[idx] = (f1, f2)
+                        else:
+                            # Пересечение не найдено - возможно, это impossible case
+                            # Согласно теории Czech алгоритма, impossible cases (например, '001', '002')
+                            # указывают на числовую неточность вычислений
+                            # В таких случаях граница пересечения продолжается через соседние треугольники
+                            
+                            # Сохраняем пары из impossible_couple для последующей обработки
+                            # через neighbor tracing после основного цикла обхода дерева
+                            if impossible_couple:
+                                # impossible_couple - это список кортежей (Face, Face) пар,
+                                # которые попали в impossible cases классификации
+                                # Добавляем их в очередь для обработки после основного цикла
+                                if not hasattr(self, '_impossible_pairs_queue'):
+                                    self._impossible_pairs_queue = []
+                                self._impossible_pairs_queue.extend(impossible_couple)
+                # Продолжаем цикл, так как оба узла были листьями и обработаны
+                continue
+                                  
+            # --- Случаи 2-4: Раскрытие внутренних узлов ---
+            # Если хотя бы один из узлов является внутренним (не листом),
+            # добавляем в стек пары дочерних узлов для дальнейшей проверки
+            
+            # Случай 2: node_a - лист, node_b - внутренний узел
+            # Добавляем в стек все пары (node_a, child_b) для каждого дочернего узла node_b
+            if node_a.is_leaf and not node_b.is_leaf:
+                for child in node_b.children:
+                    if child is not None:
+                        stack.append((node_a, child))
+            
+            # Случай 3: node_a - внутренний узел, node_b - лист
+            # Добавляем в стек все пары (child_a, node_b) для каждого дочернего узла node_a
+            elif not node_a.is_leaf and node_b.is_leaf:
+                for child in node_a.children:
+                    if child is not None:
+                        stack.append((child, node_b))
+            
+            # Случай 4: Оба узла - внутренние
+            # Добавляем в стек все пары (child_a, child_b) для всех комбинаций
+            # дочерних узлов node_a и node_b
+            else:
+                for child_a in node_a.children:
+                    for child_b in node_b.children:
+                        if child_a is not None and child_b is not None:
+                            stack.append((child_a, child_b))
+        
+        # --- Этап 2: Обработка impossible_couples через neighbor tracing ---
+        # Согласно теории Czech алгоритма (CZECH_THEORY.md, строки 100-104):
+        # при невозможном случае классификации граница пересечения продолжается через соседние треугольники
+        # Алгоритм neighbor tracing проверяет соседние грани для пар, попавших в impossible cases,
+        # чтобы найти правильное продолжение границы пересечения
+        
+        if hasattr(self, '_impossible_pairs_queue') and self._impossible_pairs_queue:
+            logger.debug("BVHTree: Processing %d impossible pairs through neighbor tracing", len(self._impossible_pairs_queue))
+            
+            # Обрабатываем каждую пару граней из очереди impossible cases
+            for face_a, face_b in self._impossible_pairs_queue:
+                # Получаем списки соседних граней для обеих граней
+                # Соседние грани - это грани, имеющие общее ребро с текущей гранью
+                neighbors_a = face_a.neighbourhood()
+                neighbors_b = face_b.neighbourhood()
+                
+                # --- Вариант 1: Проверка пар (сосед face_a, face_b) ---
+                # Проверяем пересечение между соседними гранями face_a и face_b
+                # Это соответствует случаю, когда граница пересечения продолжается через
+                # соседнюю грань face_a, а не через саму face_a
+                for neighbor_face_a in neighbors_a:
+                    # Проверяем, не проверяли ли мы уже эту пару ранее в основном цикле
+                    pair_key = tuple(sorted((neighbor_face_a.glo_id, face_b.glo_id)))
+                    if pair_key in checked_pairs:
+                        continue
+                    
+                    # Фильтруем пары граней-соседей (они не могут пересекаться)
+                    if _is_neighbour(neighbor_face_a, face_b):
+                        continue
+                    
+                    # Помечаем пару как проверенную
+                    checked_pairs.add(pair_key)
+                    
+                    # Выполняем геометрическую проверку пересечения для новой пары
+                    neighbor_cz = CzechClassify(
+                        candidates=(neighbor_face_a, face_b),
+                        checked_pairs=set(),  # Создаём новый set для checked_pairs (локальный для neighbor tracing)
+                        pair_index=-1,  # Используем специальный индекс для neighbor tracing
+                    )
+                    has_intersection, intersection_result, _ = neighbor_cz.get_intersection()
+                    
+                    # Если найдено пересечение через соседа, добавляем его к соответствующим граням
+                    if has_intersection and intersection_result:
+                        neighbor_id = neighbor_face_a.glo_id
+                        face_b_id = face_b.glo_id
+                        
+                        # Инициализируем записи в faces_to_fix, если их ещё нет
+                        if neighbor_id not in self.faces_to_fix:
+                            self.faces_to_fix[neighbor_id] = (neighbor_face_a, [])
+                        if face_b_id not in self.faces_to_fix:
+                            self.faces_to_fix[face_b_id] = (face_b, [])
+                        
+                        # Добавляем сегмент пересечения к обеим граням
+                        self.faces_to_fix[neighbor_id][1].append(intersection_result)
+                        self.faces_to_fix[face_b_id][1].append(intersection_result)
+                        
+                        logger.debug(
+                            "BVHTree: neighbor_tracing found intersection via neighbor face_a (%d -> %d, face_b=%d)",
+                            face_a.glo_id,
+                            neighbor_id,
+                            face_b_id,
+                        )
+                        # Нашли пересечение через соседа face_a, переходим к следующей паре из очереди
+                        break
+                
+                # --- Вариант 2: Проверка пар (face_a, сосед face_b) ---
+                # Проверяем пересечение между face_a и соседними гранями face_b
+                # Это соответствует случаю, когда граница пересечения продолжается через
+                # соседнюю грань face_b, а не через саму face_b
+                for neighbor_face_b in neighbors_b:
+                    # Проверяем, не проверяли ли мы уже эту пару ранее в основном цикле
+                    pair_key = tuple(sorted((face_a.glo_id, neighbor_face_b.glo_id)))
+                    if pair_key in checked_pairs:
+                        continue
+                    
+                    # Фильтруем пары граней-соседей (они не могут пересекаться)
+                    if _is_neighbour(face_a, neighbor_face_b):
+                        continue
+                    
+                    # Помечаем пару как проверенную
+                    checked_pairs.add(pair_key)
+                    
+                    # Выполняем геометрическую проверку пересечения для новой пары
+                    neighbor_cz = CzechClassify(
+                        candidates=(face_a, neighbor_face_b),
+                        checked_pairs=set(),  # Создаём новый set для checked_pairs (локальный для neighbor tracing)
+                        pair_index=-1,  # Используем специальный индекс для neighbor tracing
+                    )
+                    has_intersection, intersection_result, _ = neighbor_cz.get_intersection()
+                    
+                    # Если найдено пересечение через соседа, добавляем его к соответствующим граням
+                    if has_intersection and intersection_result:
+                        face_a_id = face_a.glo_id
+                        neighbor_id = neighbor_face_b.glo_id
+                        
+                        # Инициализируем записи в faces_to_fix, если их ещё нет
+                        if face_a_id not in self.faces_to_fix:
+                            self.faces_to_fix[face_a_id] = (face_a, [])
+                        if neighbor_id not in self.faces_to_fix:
+                            self.faces_to_fix[neighbor_id] = (neighbor_face_b, [])
+                        
+                        # Добавляем сегмент пересечения к обеим граням
+                        self.faces_to_fix[face_a_id][1].append(intersection_result)
+                        self.faces_to_fix[neighbor_id][1].append(intersection_result)
+                        
+                        logger.debug(
+                            "BVHTree: neighbor_tracing found intersection via neighbor face_b (face_a=%d, %d -> %d)",
+                            face_a_id,
+                            face_b.glo_id,
+                            neighbor_id,
+                        )
+                        # Нашли пересечение через соседа face_b, переходим к следующей паре из очереди
+                        break
+            
+            # Очищаем очередь impossible pairs после обработки
+            # Эта очередь использовалась только для neighbor tracing и больше не нужна
+            del self._impossible_pairs_queue
+                                                         
+        logger.info(
+            "BVHTree: traversal_tree finished; candidate_pairs=%d, candidate_pairs_after_czech=%d, faces_to_fix=%d, checked_pairs=%d",
+            len(self.candidate_pairs),
+            len(self.candidate_pairs_after_czech),
+            len(self.faces_to_fix),
+            len(checked_pairs),
+        )
+        logger.debug("BVHTree: Values in checked_pairs=%s", len(checked_pairs))
+        return self.faces_to_fix
+                        
 
 if __name__ == '__main__':
     mesh = Mesh("examples/small_sphere_double.dat")

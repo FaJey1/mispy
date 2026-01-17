@@ -1,5 +1,3 @@
-import logging
-
 from .statistics import *
 from .visualization import *
 
