@@ -10,7 +10,7 @@ from mispy.extract_mesh import Node, Face
 logger = logging.getLogger(__name__)
 
 
-def _edge_plane_intersection(a, b, n, d, eps=1e-9):
+def _edge_plane_intersection(a, b, n, d, eps=1e-22):
     """
     Вычисляет пересечение ребра AB с плоскостью n·x + d = 0.
     
@@ -67,7 +67,7 @@ def _edge_plane_intersection(a, b, n, d, eps=1e-9):
     return t, point
 
 
-def _classify_point(t, eps=1e-6):
+def _classify_point(t, eps=1e-22):
     """
     Классифицирует параметр пересечения t вдоль ребра.
     
@@ -97,7 +97,7 @@ def _classify_point(t, eps=1e-6):
         return 2  # Точка внутри ребра
 
 
-def _plane_parallel(n1, n2, eps=1e-12):
+def _plane_parallel(n1, n2, eps=1e-22):
     """
     Проверяет, являются ли две плоскости параллельными.
     
@@ -122,7 +122,7 @@ def _plane_parallel(n1, n2, eps=1e-12):
     return np.linalg.norm(np.cross(n1, n2)) < eps
 
 
-def _point_in_triangle(point: np.ndarray, face: Face, eps: float = 1e-9) -> bool:
+def _point_in_triangle(point: np.ndarray, face: Face, eps: float = 1e-22) -> bool:
     """
     Проверяет, принадлежит ли точка треугольнику (в 3D пространстве).
     
@@ -268,6 +268,8 @@ class CzechClassify:
         self.impossible_cases = {"001", "002", "012", "122", "222"}
         # Особые случаи классификации
         self.special_cases = {"000"}
+        
+        self.eps = 1e-11
     
     # ----------------------------------------------------------------------------------
     
@@ -332,7 +334,7 @@ class CzechClassify:
         if is_parallel:
             # Проверяем совпадение плоскостей: d1 ≈ d2 или d1 ≈ -d2
             # (второй случай - нормали противоположны, но плоскости совпадают)
-            if abs(d1 - d2) < 1e-12 or abs(d1 + d2) < 1e-12:
+            if abs(d1 - d2) < self.eps or abs(d1 + d2) < self.eps:
                 is_coplanar = True
                 logger.debug(
                     "CzechClassify: Pair %d, faces %d and %d are coplanar",
@@ -613,12 +615,11 @@ class CzechClassify:
         
         # Удаляем дубликаты точек (проверка на близость с epsilon)
         # Две точки считаются одинаковыми, если расстояние между ними < eps
-        eps = 1e-9
         unique_points = []
         for pt in all_intersection_points:
             is_duplicate = False
             for existing_pt in unique_points:
-                if np.linalg.norm(pt - existing_pt) < eps:
+                if np.linalg.norm(pt - existing_pt) < self.eps:
                     is_duplicate = True
                     break
             if not is_duplicate:
@@ -640,13 +641,12 @@ class CzechClassify:
         # Проверяем принадлежность найденных точек обоим треугольникам
         # Точка должна лежать внутри или на границе обоих треугольников для реального пересечения
         valid_intersection_points = []
-        eps = 1e-9
         
         for pt in unique_points:
             # Проверяем принадлежность точки face_a (включая границы)
-            in_face_a = _point_in_triangle(pt, self.face_a, eps)
+            in_face_a = _point_in_triangle(pt, self.face_a, self.eps)
             # Проверяем принадлежность точки face_b (включая границы)
-            in_face_b = _point_in_triangle(pt, self.face_b, eps)
+            in_face_b = _point_in_triangle(pt, self.face_b, self.eps)
             
             if in_face_a and in_face_b:
                 # Точка принадлежит обоим треугольникам - это валидная точка пересечения
@@ -680,7 +680,7 @@ class CzechClassify:
             # Пытаемся найти существующий Node с такими же координатами
             found_node = None
             for node in all_face_nodes:
-                if np.linalg.norm(node.p - pt) < eps:
+                if np.linalg.norm(node.p - pt) < self.eps:
                     found_node = node
                     break
             
@@ -823,13 +823,12 @@ class CzechClassify:
             # то пересечения нет (это касание в одной точке, а не пересечение)
             # Согласно теории: если одна точка лежит в вершине, нужно обязательно найти
             # вторую точку, которая НЕ является вершиной
-            eps = 1e-9
             common_vertex_coords = common_vertex.p
             all_points_match_vertex = True
             
             # Проверяем все найденные точки пересечения (теперь это объекты Node)
             for node in intersection_segment:
-                if np.linalg.norm(node.p - common_vertex_coords) > eps:
+                if np.linalg.norm(node.p - common_vertex_coords) > self.eps:
                     all_points_match_vertex = False
                     break
             
@@ -846,7 +845,7 @@ class CzechClassify:
             # Берём первую найденную точку пересечения, которая отличается от общей вершины
             second_point_node = None
             for node in intersection_segment:
-                if np.linalg.norm(node.p - common_vertex_coords) > eps:
+                if np.linalg.norm(node.p - common_vertex_coords) > self.eps:
                     second_point_node = node
                     break
             

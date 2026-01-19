@@ -1631,11 +1631,12 @@ class BVHTree:
             del self._impossible_pairs_queue
                                                          
         logger.info(
-            "BVHTree: traversal_tree finished; candidate_pairs=%d, candidate_pairs_after_czech=%d, faces_to_fix=%d, checked_pairs=%d",
+            "BVHTree: traversal_tree finished; candidate_pairs=%d, candidate_pairs_after_czech=%d, faces_to_fix=%d, checked_pairs=%d, impossible_couples=%d",
             len(self.candidate_pairs),
             len(self.candidate_pairs_after_czech),
             len(self.faces_to_fix),
             len(checked_pairs),
+            len(self.impossible_couples),
         )
         logger.debug("BVHTree: Values in checked_pairs=%s", len(checked_pairs))
         return self.faces_to_fix

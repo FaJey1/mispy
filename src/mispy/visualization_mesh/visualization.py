@@ -14,6 +14,7 @@ import logging
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+import pandas as pd
 from typing import Dict, Tuple, List, Optional
 
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
@@ -118,7 +119,7 @@ def draw_face(ax,
 def draw_intersection_seg(ax,
             segment_coord=[],
             color="red",
-            linewidths=0.3,
+            linewidths=4,
             alpha=0.3):
     """
     Рисует сегменты пересечения на 3D графике.
@@ -539,6 +540,112 @@ def visualize_bvh_tree_graph(graph):
     nx.draw(graph, pos, labels=labels, with_labels=True, node_size=350, node_color="lightblue", arrows=False, font_size=6)
     plt.title("BVH Tree Structure", fontsize=12)
     plt.show()
+
+
+def visualization_results(results):
+    """
+    Визуализирует результаты тестов BVH алгоритма в виде столбчатых диаграмм.
+    
+    Группирует тесты по сеткам и создаёт отдельную диаграмму для каждой сетки,
+    показывая время выполнения по этапам: подготовка, построение, обход.
+    
+    Parameters
+    ----------
+    results : List[Dict]
+        Список словарей с результатами тестов, возвращаемых функцией alg().
+    
+    Notes
+    -----
+    Подписи к барам включают:
+    - Номер теста
+    - Включен ли ESC
+    - Количество ячеек в листе (FoL)
+    - Найдено пар для коррекции (CF)
+    
+    Время выполнения каждой стадии отображается в центре соответствующего столбца.
+    Шаг графика по оси Y установлен в 1 секунду.
+    
+    Для каждой сетки создаётся отдельный график.
+    """
+    from mispy.visualization_mesh.statistics import _build_table_summary
+    
+    df = pd.DataFrame(_build_table_summary(results))
+
+    colors = {
+        "prepare": "#FFA94D",
+        "build": "#5B8DB8",
+        "traversal": "#7C6AB9",
+    }
+
+    # Группируем тесты по сеткам и создаём отдельный график для каждой сетки
+    for grid in df["Сетка"].unique():
+        df_grid = df[df["Сетка"] == grid].sort_values("Общее время, сек")
+
+        # Формируем подписи: номер теста, ESC, FoL (количество ячеек в листе), 
+        # CF (количество пар для коррекции)
+        tests = [
+            f"Тест {int(t)}\nESC:{e}\nFoL:{fol}\nCF:{cf}"
+            for t, e, fol, cf in zip(
+                df_grid["Тест"],
+                df_grid["ESC"],
+                df_grid["Ячеек в листе"],
+                df_grid["Пар для коррекции"]
+            )
+        ]
+        
+        prepare = df_grid["Подготовка, сек"]
+        build = df_grid["Построение, сек"]
+        traversal = df_grid["Обход, сек"]
+        total_time = df_grid["Общее время, сек"]
+
+        # Размер фигуры зависит от количества тестов в данной сетке
+        num_tests = len(df_grid)
+        fig_width = max(12, num_tests * 1.5)
+        plt.figure(figsize=(fig_width, 6))
+        
+        # Рисуем столбцы для каждого этапа
+        plt.bar(tests, prepare, label="Время подготовки", color=colors["prepare"])
+        plt.bar(tests, build, bottom=prepare, label="Время построения", color=colors["build"])
+        plt.bar(tests, traversal, bottom=prepare + build, label="Время обхода", color=colors["traversal"])
+
+        # Добавляем текст с временем выполнения в центре каждого столбца
+        for i, (p, b, t) in enumerate(zip(prepare, build, traversal)):
+            # Время подготовки
+            if p > 0:
+                plt.text(i, p / 2, f"{p:.4f}", ha='center', va='center', 
+                        fontsize=8, color='black', weight='bold')
+            
+            # Время построения
+            if b > 0:
+                plt.text(i, prepare.iloc[i] + b / 2, f"{b:.4f}", ha='center', va='center', 
+                        fontsize=8, color='black', weight='bold')
+            
+            # Время обхода
+            if t > 0:
+                plt.text(i, prepare.iloc[i] + build.iloc[i] + t / 2, f"{t:.4f}", 
+                        ha='center', va='center', fontsize=8, color='black', weight='bold')
+
+        # Линия общего времени
+        for i, t in enumerate(total_time):
+            plt.hlines(y=t, xmin=i-0.4, xmax=i+0.4, colors='gray', 
+                      linestyles='dashed', linewidth=1)
+            plt.text(i, t + 0.05, f"{t:.4f}", ha='center', va='bottom', 
+                    fontsize=8, color='gray')
+
+        plt.ylabel("Время выполнения, сек")
+        plt.xlabel("Тесты")
+        plt.title(f"Время выполнения BVH по этапам для сетки '{grid}'")
+        plt.legend()
+        plt.xticks(rotation=45, ha="right")
+        
+        # Устанавливаем шаг графика по оси Y = 1 секунда
+        max_time = total_time.max()
+        y_ticks = np.arange(0, max_time + 1.5, 1.0)
+        plt.yticks(y_ticks)
+        
+        plt.grid(axis='y', alpha=0.3, linestyle='--')
+        plt.tight_layout()
+        plt.show()
 
 
 if __name__ == '__main__':
