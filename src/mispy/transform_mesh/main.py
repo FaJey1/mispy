@@ -43,7 +43,7 @@ logging.getLogger("mispy.transform_mesh.czech_classify").setLevel(logging.DEBUG)
     
 if __name__ == '__main__':
     mesh = Mesh("examples/small_sphere_double.dat")
-    mesh = Mesh("examples/sphere_double.dat")
+    #mesh = Mesh("examples/sphere_double.dat")
     #mesh = Mesh("examples/bunny_double.dat")
     
     times = {}
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     # Визуализация всей сетки с гранями, имеющими пересечения, и их сегментами
     mesh_plotter(
         mesh=mesh,
-        faces_enable=False,  # Показать все грани сетки
+        faces_enable=True,  # Показать все грани сетки
         draw_aabb=False,
         edge_enable=False,
         faces_to_fix=bvh.faces_to_fix,  # Грани с пересечениями

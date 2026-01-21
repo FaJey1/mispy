@@ -193,6 +193,48 @@ def _save_csv(filename, rows):
         writer.writeheader()
         writer.writerows(rows)
 
+def _load_csv(filename):
+    """
+    Загружает таблицу из CSV файла и преобразует в формат результатов alg().
+    
+    Parameters
+    ----------
+    filename : str
+        Путь к CSV файлу (относительно корня проекта или абсолютный).
+    
+    Returns
+    -------
+    List[Dict]
+        Список словарей с результатами в формате, который возвращает функция alg().
+        Ключи: test_id, mesh, faces, edges, nodes, prepare_time, build_time,
+        traversal_time, total_time, split_func, esc, faces_in_node, pairs_to_fix.
+    """
+    path = filename if os.path.isabs(filename) else os.path.join("results", filename)
+    
+    results = []
+    with open(path, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            # Преобразуем данные из CSV формата в формат alg()
+            result = {
+                "test_id": int(row["Тест"]),
+                "mesh": row["Сетка"],
+                "faces": int(row["Ячеек"]),
+                "edges": int(row["Рёбер"]),
+                "nodes": int(row["Вершин"]),
+                "prepare_time": float(row["Подготовка, сек"]),
+                "build_time": float(row["Построение, сек"]),
+                "traversal_time": float(row["Обход, сек"]),
+                "total_time": float(row["Общее время, сек"]),
+                "split_func": row["Функция разбиения"],
+                "esc": row["ESC"].lower() == "true" if isinstance(row["ESC"], str) else bool(row["ESC"]),
+                "faces_in_node": int(row["Ячеек в листе"]),
+                "pairs_to_fix": int(row["Пар для коррекции"]),
+            }
+            results.append(result)
+    
+    return results
+
 def save_results(results):
     """
     Сохраняет результаты тестов в CSV файлы.

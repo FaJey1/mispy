@@ -626,10 +626,12 @@ def visualization_results(results):
                         ha='center', va='center', fontsize=8, color='black', weight='bold')
 
         # Линия общего времени
+        max_time = total_time.max()
         for i, t in enumerate(total_time):
             plt.hlines(y=t, xmin=i-0.4, xmax=i+0.4, colors='gray', 
                       linestyles='dashed', linewidth=1)
-            plt.text(i, t + 0.05, f"{t:.4f}", ha='center', va='bottom', 
+            # Текст общего времени прижат к бару (минимальный отступ)
+            plt.text(i, t + 0.01, f"{t:.4f}", ha='center', va='bottom', 
                     fontsize=8, color='gray')
 
         plt.ylabel("Время выполнения, сек")
@@ -638,10 +640,123 @@ def visualization_results(results):
         plt.legend()
         plt.xticks(rotation=45, ha="right")
         
-        # Устанавливаем шаг графика по оси Y = 1 секунда
-        max_time = total_time.max()
-        y_ticks = np.arange(0, max_time + 1.5, 1.0)
-        plt.yticks(y_ticks)
+        # Устанавливаем верхний предел оси Y с запасом для легенды и текста общего времени
+        # Добавляем 15% от максимального времени для размещения легенды и текста
+        y_max = max_time * 1.15
+        plt.ylim(0, y_max)
+        
+        plt.grid(axis='y', alpha=0.3, linestyle='--')
+        plt.tight_layout()
+        plt.show()
+
+
+def visualization_results_percents(results):
+    """
+    Визуализирует результаты тестов BVH алгоритма в виде столбчатых диаграмм с процентами.
+    
+    Группирует тесты по сеткам и создаёт отдельную диаграмму для каждой сетки,
+    показывая процентное соотношение времени выполнения по этапам: подготовка, построение, обход.
+    По оси Y откладываются проценты (0-100%), внутри баров отображаются проценты от общего времени,
+    а сверху каждого бара - общее время выполнения в секундах.
+    
+    Parameters
+    ----------
+    results : List[Dict]
+        Список словарей с результатами тестов, возвращаемых функцией alg().
+    
+    Notes
+    -----
+    Подписи к барам включают:
+    - Номер теста
+    - Включен ли ESC
+    - Количество ячеек в листе (FoL)
+    - Найдено пар для коррекции (CF)
+    
+    Процентное соотношение каждой стадии отображается в центре соответствующего столбца.
+    Общее время выполнения отображается сверху каждого бара в секундах.
+    
+    Для каждой сетки создаётся отдельный график.
+    """
+    from mispy.visualization_mesh.statistics import _build_table_summary
+    
+    df = pd.DataFrame(_build_table_summary(results))
+
+    colors = {
+        "prepare": "#FFA94D",
+        "build": "#5B8DB8",
+        "traversal": "#7C6AB9",
+    }
+
+    # Группируем тесты по сеткам и создаём отдельный график для каждой сетки
+    for grid in df["Сетка"].unique():
+        df_grid = df[df["Сетка"] == grid].sort_values("Общее время, сек")
+
+        # Формируем подписи: номер теста, ESC, FoL (количество ячеек в листе), 
+        # CF (количество пар для коррекции)
+        tests = [
+            f"Тест {int(t)}\nESC:{e}\nFoL:{fol}\nCF:{cf}"
+            for t, e, fol, cf in zip(
+                df_grid["Тест"],
+                df_grid["ESC"],
+                df_grid["Ячеек в листе"],
+                df_grid["Пар для коррекции"]
+            )
+        ]
+        
+        prepare = df_grid["Подготовка, сек"]
+        build = df_grid["Построение, сек"]
+        traversal = df_grid["Обход, сек"]
+        total_time = df_grid["Общее время, сек"]
+
+        # Вычисляем проценты для каждого этапа от общего времени
+        prepare_percent = (prepare / total_time) * 100
+        build_percent = (build / total_time) * 100
+        traversal_percent = (traversal / total_time) * 100
+
+        # Размер фигуры зависит от количества тестов в данной сетке
+        num_tests = len(df_grid)
+        fig_width = max(12, num_tests * 1.5)
+        plt.figure(figsize=(fig_width, 6))
+        
+        # Рисуем столбцы для каждого этапа (в процентах)
+        plt.bar(tests, prepare_percent, label="Время подготовки", color=colors["prepare"])
+        plt.bar(tests, build_percent, bottom=prepare_percent, label="Время построения", color=colors["build"])
+        plt.bar(tests, traversal_percent, bottom=prepare_percent + build_percent, label="Время обхода", color=colors["traversal"])
+
+        # Добавляем текст с процентами в центре каждого столбца
+        for i, (p_pct, b_pct, t_pct) in enumerate(zip(prepare_percent, build_percent, traversal_percent)):
+            # Процент подготовки
+            if p_pct > 0:
+                plt.text(i, p_pct / 2, f"{p_pct:.1f}%", ha='center', va='center', 
+                        fontsize=8, color='black', weight='bold')
+            
+            # Процент построения
+            if b_pct > 0:
+                plt.text(i, prepare_percent.iloc[i] + b_pct / 2, f"{b_pct:.1f}%", ha='center', va='center', 
+                        fontsize=8, color='black', weight='bold')
+            
+            # Процент обхода
+            if t_pct > 0:
+                plt.text(i, prepare_percent.iloc[i] + build_percent.iloc[i] + t_pct / 2, f"{t_pct:.1f}%", 
+                        ha='center', va='center', fontsize=8, color='black', weight='bold')
+
+        # Текст общего времени сверху каждого бара
+        max_percent = 100.0  # Максимальный процент всегда 100%
+        for i, t in enumerate(total_time):
+            # Текст общего времени сверху бара
+            plt.text(i, 100.0 + 1.0, f"{t:.4f}", ha='center', va='bottom', 
+                    fontsize=8, color='gray')
+
+        plt.ylabel("Процент от общего времени, %")
+        plt.xlabel("Тесты")
+        plt.title(f"Процентное соотношение времени выполнения BVH по этапам для сетки '{grid}'")
+        plt.legend()
+        plt.xticks(rotation=45, ha="right")
+        
+        # Устанавливаем верхний предел оси Y с запасом для легенды и текста общего времени
+        # Добавляем 15% от максимального процента (100%) для размещения легенды и текста
+        y_max = 100.0 * 1.15
+        plt.ylim(0, y_max)
         
         plt.grid(axis='y', alpha=0.3, linestyle='--')
         plt.tight_layout()

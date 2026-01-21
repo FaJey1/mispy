@@ -2,8 +2,6 @@ import logging
 import sys
 import time
 
-from tabulate import tabulate
-
 from mispy.extract_mesh import *
 from mispy.transform_mesh import *
 from mispy.visualization_mesh.statistics import (
@@ -11,8 +9,9 @@ from mispy.visualization_mesh.statistics import (
     statistic_mesh,
     save_results,
     measure_time,
+    _load_csv,
 )
-from mispy.visualization_mesh.visualization import visualization_results
+from mispy.visualization_mesh.visualization import visualization_results, visualization_results_percents
 
 
 # Настройка логирования для всех модулей
@@ -48,6 +47,8 @@ logging.getLogger("mispy.transform_mesh.czech_classify").setLevel(logging.DEBUG)
 def alg(mesh: Mesh, test_id: int, split_func: str = "sah",
         esc_enable: bool = False, faces_in_node: int = 1):
     """Запускает BVH алгоритм и возвращает результаты."""
+    from tabulate import tabulate
+    
     times = {}
     bvh = BVHTree(mesh, faces_in_node=faces_in_node)
 
@@ -121,24 +122,24 @@ def main():
         8: ("small_sphere_double", True, "sah", 1),
 
         # --- sphere ---
-        #9: ("sphere_double", False, "vah", 5),
-        # 10: ("sphere_double", False, "vah", 1),
-        # 11: ("sphere_double", False, "sah", 5),
-        # 12: ("sphere_double", False, "sah", 1),
-        # 13: ("sphere_double", True, "vah", 5),
-        # 14: ("sphere_double", True, "vah", 1),
-        # 15: ("sphere_double", True, "sah", 5),
-        # 16: ("sphere_double", True, "sah", 1),
+        9: ("sphere_double", False, "vah", 5),
+        10: ("sphere_double", False, "vah", 1),
+        11: ("sphere_double", False, "sah", 5),
+        12: ("sphere_double", False, "sah", 1),
+        13: ("sphere_double", True, "vah", 5),
+        14: ("sphere_double", True, "vah", 1),
+        15: ("sphere_double", True, "sah", 5),
+        16: ("sphere_double", True, "sah", 1),
 
         # --- bunny ---
-        # 17: ("bunny_double", False, "vah", 5),
-        # 18: ("bunny_double", False, "vah", 1),
-        # 19: ("bunny_double", False, "sah", 5),
-        # 20: ("bunny_double", False, "sah", 1),
-        # 21: ("bunny_double", True, "vah", 5),
-        # 22: ("bunny_double", True, "vah", 1),
-        # 23: ("bunny_double", True, "sah", 5),
-        # 24: ("bunny_double", True, "sah", 1),
+        17: ("bunny_double", False, "vah", 5),
+        18: ("bunny_double", False, "vah", 1),
+        19: ("bunny_double", False, "sah", 5),
+        20: ("bunny_double", False, "sah", 1),
+        21: ("bunny_double", True, "vah", 5),
+        22: ("bunny_double", True, "vah", 1),
+        23: ("bunny_double", True, "sah", 5),
+        24: ("bunny_double", True, "sah", 1),
     }
 
     results = []
@@ -149,7 +150,15 @@ def main():
 
     save_results(results)
     visualization_results(results)
+    visualization_results(results)
+
+def visualization_passed_tests_result():
+    results = _load_csv("table_summary.csv")
+    visualization_results(results)
+    visualization_results_percents(results)
 
 
 if __name__ == '__main__':
-    main()
+    #main()
+    visualization_passed_tests_result()
+    

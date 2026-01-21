@@ -4,3 +4,4 @@ build/*
 examples/*
 MESH_STRUCTURE_ANALYSIS.md
 CZECH_THEORY.md
+log.txt
