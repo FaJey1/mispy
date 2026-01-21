@@ -178,7 +178,11 @@ def _build_table_traversal_classification(results):
             "функция разбиения": r["split_func"],
             "найдено пар для коррекции": r["pairs_to_fix"],
             "кол-во невозможных пар": r["impossible_couples_count"],
+            "кол-во проверенных пар checked_pairs": r["checked_pairs"],
+            "кол-во пар найденных без checheked_pairs": r["candidate_pairs_without_checked_pairs"],
+            "cумма кол-во пар найденных пар и списка checheked_pairs": r["sum_candidate_pairs_count_checked_pairs"],
             "кол-во пар найденных до классификации bvh": r["candidate_pairs_count"],
+            "кол-во пар найденных без классификации": r["candidate_pairs_after_czech_count"],
             "время обхода с учетом классификации": r["traversal_time"],
         }
         for r in results

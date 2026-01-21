@@ -2,6 +2,7 @@ import logging
 import sys
 import time
 
+from tabulate import tabulate
 from mispy.extract_mesh import *
 from mispy.transform_mesh import *
 from mispy.visualization_mesh.statistics import (
@@ -47,7 +48,6 @@ logging.getLogger("mispy.transform_mesh.czech_classify").setLevel(logging.DEBUG)
 def alg(mesh: Mesh, test_id: int, split_func: str = "sah",
         esc_enable: bool = False, faces_in_node: int = 1):
     """Запускает BVH алгоритм и возвращает результаты."""
-    from tabulate import tabulate
     
     times = {}
     bvh = BVHTree(mesh, faces_in_node=faces_in_node)
@@ -93,7 +93,10 @@ def alg(mesh: Mesh, test_id: int, split_func: str = "sah",
         "esc": esc_enable,
         "faces_in_node": faces_in_node,
         "pairs_to_fix": len(bvh.faces_to_fix),
+        "candidate_pairs_without_checked_pairs": len(bvh.candidate_pairs_without_checked_pairs),
+        "checked_pairs": len(bvh.checked_pairs),
         "candidate_pairs_count": len(bvh.candidate_pairs),
+        "sum_candidate_pairs_count_checked_pairs": len(bvh.checked_pairs)+len(bvh.candidate_pairs),
         "candidate_pairs_after_czech_count": len(bvh.candidate_pairs_after_czech),
         "impossible_couples_count": impossible_couples_count,
         "bvh_vertices": bvh_stats["bvh_nodes"],
@@ -149,8 +152,6 @@ def main():
         results.append(alg(mesh, test_id, split, esc, leaf))
 
     save_results(results)
-    visualization_results(results)
-    visualization_results(results)
 
 def visualization_passed_tests_result():
     results = _load_csv("table_summary.csv")

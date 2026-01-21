@@ -48,7 +48,7 @@ if __name__ == '__main__':
     
     times = {}
     bvh = BVHTree(mesh, faces_in_node=1)
-    _, times["prepare"] = measure_time(bvh.prepare_mesh, esc_enable=False)
+    _, times["prepare"] = measure_time(bvh.prepare_mesh, esc_enable=True)
     _, times["build"] = measure_time(bvh.build_tree, split_func="vah")
     _, times["traversal"] = measure_time(bvh.traversal_tree)
     

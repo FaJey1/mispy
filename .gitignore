@@ -3,5 +3,6 @@ build/*
 .venv/*
 examples/*
 MESH_STRUCTURE_ANALYSIS.md
+Early Split Clipping.md
 CZECH_THEORY.md
 log.txt

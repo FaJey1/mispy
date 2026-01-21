@@ -263,12 +263,78 @@ class PrimitiveRef:
         содержит координаты одной вершины (x, y, z). Используется для
         быстрого доступа к координатам без обращения к face.nodes[i].p
         при обходе дерева и проверке пересечений.
+    esc_boxes : List[Tuple[np.ndarray, np.ndarray]]
+        Список AABB боксов, полученных через Early Split Clipping (ESC) для данной грани.
+        Каждый элемент - кортеж (bb_min, bb_max). Пустой список, если ESC не применялся.
+        Используется для анализа и визуализации, не влияет на корректность BVH.
+    esc_sa_max : Optional[float]
+        Порог площади поверхности AABB (SAmax), использованный при генерации ESC-боксов.
+        None, если ESC не применялся.
     """
 
     face: Face
     bb_min: np.ndarray
     bb_max: np.ndarray
     nodes_coords: np.ndarray
+    esc_boxes: List[Tuple[np.ndarray, np.ndarray]] = field(default_factory=list)
+    esc_sa_max: Optional[float] = None
+
+
+def _get_primitive_aabbs(p: PrimitiveRef) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """
+    Возвращает список всех AABB боксов для примитива.
+    
+    Если для примитива применён Early Split Clipping (ESC), возвращает список ESC-боксов.
+    Иначе возвращает список с одним стандартным AABB боксом примитива.
+    
+    Согласно теории Early Split Clipping (Early Split Clipping.md), ESC-боксы являются
+    более точными (меньшими и непересекающимися) представлениями примитива и должны
+    использоваться вместо стандартного AABB для улучшения качества BVH-дерева.
+    
+    Parameters
+    ----------
+    p : PrimitiveRef
+        Примитив, для которого нужно получить AABB боксы.
+    
+    Returns
+    -------
+    List[Tuple[np.ndarray, np.ndarray]]
+        Список AABB боксов в формате (bb_min, bb_max).
+        Если ESC применён, содержит все ESC-боксы из p.esc_boxes.
+        Иначе содержит один элемент: (p.bb_min, p.bb_max).
+    """
+    if p.esc_boxes:
+        return p.esc_boxes
+    else:
+        return [(p.bb_min, p.bb_max)]
+
+
+def _include_primitive_aabbs(bb_min: np.ndarray, bb_max: np.ndarray, p: PrimitiveRef) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Расширяет AABB, включая все боксы примитива (ESC-боксы или стандартный AABB).
+    
+    Использует _get_primitive_aabbs() для получения всех боксов примитива и
+    итеративно расширяет результирующий AABB через _aabb_include().
+    
+    Parameters
+    ----------
+    bb_min : np.ndarray
+        Текущие минимальные координаты AABB.
+    bb_max : np.ndarray
+        Текущие максимальные координаты AABB.
+    p : PrimitiveRef
+        Примитив, боксы которого нужно включить.
+    
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        Расширенный AABB, содержащий все боксы примитива.
+    """
+    aabbs = _get_primitive_aabbs(p)
+    for p_bb_min, p_bb_max in aabbs:
+        bb_min, bb_max = _aabb_include(bb_min, bb_max, p_bb_min, p_bb_max)
+    return bb_min, bb_max
+
 
 @dataclass
 class SplitResult:
@@ -467,12 +533,17 @@ class BVHTree:
         # Пары полученные в результате обхода дерева
         self.candidate_pairs: Dict[int, Tuple[Face, Face]] = {}
         self.candidate_pairs_after_czech: Dict[int, Tuple[Face, Face]] = {}
+        self.candidate_pairs_without_checked_pairs: Dict[int, Tuple[Face, Face]] = {}
+        self.checked_pairs: set = set()
         self.impossible_couples: Dict[int, List[Tuple[Face, Face]]] = {}
         
         # Подготовленные примитивы (заполняются в prepare_mesh)
         self._primitives: List[PrimitiveRef] = []
         self._mesh_bb_min: Optional[np.ndarray] = None
         self._mesh_bb_max: Optional[np.ndarray] = None
+        # Early Split Clipping (ESC): параметр sa_max хранится здесь для удобства доступа
+        # Сами ESC-боксы хранятся в каждом PrimitiveRef.esc_boxes
+        self._esc_sa_max: Optional[float] = None
         
     # ----------------------------------------------------------------------------------
 
@@ -510,14 +581,37 @@ class BVHTree:
                 esc_enable,
                 len(self.mesh.faces),
             )
+        # Сначала (опционально) считаем ESC-боксы для анализа.
+        # ВНИМАНИЕ: эти боксы являются "клиппингом" примитивов и НЕ содержат исходный треугольник целиком,
+        # поэтому использовать их напрямую как AABB для Face нельзя (иначе возможны пропуски пересечений).
+        esc_boxes_dict: Dict[int, List[Tuple[np.ndarray, np.ndarray]]] = {}
+        if esc_enable:
+            esc_boxes_dict, sa_max = self.early_split_clipping()
+            self._esc_sa_max = sa_max
+            total_boxes = sum(len(boxes) for boxes in esc_boxes_dict.values())
+            logger.info("BVHTree: ESC generated %d clipped boxes for %d faces (sa_max=%s)", 
+                       total_boxes, len(esc_boxes_dict), sa_max)
+        else:
+            self._esc_sa_max = None
         
+        # Стандартная подготовка примитивов: AABB каждой грани ДОЛЖЕН содержать всю грань.
         self._primitives.clear()
         mesh_bb_min, mesh_bb_max = _aabb_empty()
         for face in self.mesh.faces:
             coords = np.array([node.p for node in face.nodes], dtype=float)
             bb_min = coords.min(axis=0)
             bb_max = coords.max(axis=0)
-            self._primitives.append(PrimitiveRef(face=face, bb_min=bb_min, bb_max=bb_max, nodes_coords=coords))
+            # Получаем ESC-боксы для данной грани (если ESC был включен)
+            face_esc_boxes = esc_boxes_dict.get(face.glo_id, [])
+            face_esc_sa_max = self._esc_sa_max if esc_enable else None
+            self._primitives.append(PrimitiveRef(
+                face=face, 
+                bb_min=bb_min, 
+                bb_max=bb_max, 
+                nodes_coords=coords,
+                esc_boxes=face_esc_boxes,
+                esc_sa_max=face_esc_sa_max
+            ))
             # Итеративно расширяем общий AABB, включая AABB текущей грани
             # После цикла mesh_bb_min и mesh_bb_max будут содержать общий AABB всей сетки
             mesh_bb_min, mesh_bb_max = _aabb_include(mesh_bb_min, mesh_bb_max, bb_min, bb_max)
@@ -532,6 +626,142 @@ class BVHTree:
                 )
 
     # ----------------------------------------------------------------------------------
+
+    def early_split_clipping(
+        self,
+        sa_max: Optional[float] = None,
+        max_boxes_per_face: int = 64,
+        max_iterations_per_face: int = 256,
+    ) -> Tuple[Dict[int, List[Tuple[np.ndarray, np.ndarray]]], float]:
+        """
+        Early Split Clipping (ESC) для треугольников сетки.
+
+        Реализует идею из `Early Split Clipping.md` (Algorithm 4): каждый треугольник
+        итеративно "клиппится" ось-ориентированной плоскостью по центру bbox вдоль оси
+        максимального размера bbox, пока площадь поверхности bbox не станет ≤ SAmax.
+
+        Важно: возвращаемые боксы *не обязаны* содержать исходный треугольник целиком,
+        так как соответствуют клиппированным частям. Поэтому эти боксы предназначены
+        для анализа/визуализации и не подставляются напрямую в PrimitiveRef для Face.
+
+        Parameters
+        ----------
+        sa_max : Optional[float]
+            Порог площади поверхности AABB (SAmax). Если None, выбирается автоматически
+            как медиана площадей AABB всех граней (устойчивая к выбросам эвристика).
+        max_boxes_per_face : int
+            Ограничение на количество генерируемых боксов для одной грани (защита от взрыва).
+        max_iterations_per_face : int
+            Ограничение на количество итераций клиппинга на грань (защита от зацикливания).
+
+        Returns
+        -------
+        Tuple[Dict[int, List[Tuple[np.ndarray, np.ndarray]]], float]
+            Кортеж из двух элементов:
+            - Словарь, где ключ - face.glo_id, значение - список AABB боксов в формате (bb_min, bb_max)
+            - Значение sa_max, использованное при генерации (для сохранения в PrimitiveRef)
+        """
+
+        def _clip_polygon_halfspace(poly: np.ndarray, axis: int, split_pos: float, keep_le: bool) -> np.ndarray:
+            """Sutherland–Hodgman клиппинг выпуклого полигона плоскостью x<=c или x>=c по заданной оси."""
+            if poly.size == 0:
+                return poly
+            pts = poly.tolist()
+
+            def inside(p: List[float]) -> bool:
+                return p[axis] <= split_pos if keep_le else p[axis] >= split_pos
+
+            def intersect(p0: List[float], p1: List[float]) -> List[float]:
+                d = p1[axis] - p0[axis]
+                if d == 0.0:
+                    # Сегмент параллелен плоскости; возвращаем одну из точек (деградация безопасна для bbox)
+                    return p0
+                t = (split_pos - p0[axis]) / d
+                return [p0[i] + t * (p1[i] - p0[i]) for i in range(3)]
+
+            out: List[List[float]] = []
+            prev = pts[-1]
+            prev_in = inside(prev)
+            for cur in pts:
+                cur_in = inside(cur)
+                if cur_in:
+                    if not prev_in:
+                        out.append(intersect(prev, cur))
+                    out.append(cur)
+                else:
+                    if prev_in:
+                        out.append(intersect(prev, cur))
+                prev, prev_in = cur, cur_in
+
+            if not out:
+                return np.empty((0, 3), dtype=float)
+            return np.asarray(out, dtype=float)
+
+        # --- Автовыбор SAmax (если не задан) ---
+        if sa_max is None:
+            areas: List[float] = []
+            for face in self.mesh.faces:
+                coords = np.array([node.p for node in face.nodes], dtype=float)
+                bb_min = coords.min(axis=0)
+                bb_max = coords.max(axis=0)
+                areas.append(_aabb_surface_area(bb_min, bb_max))
+            sa_max = float(np.median(areas)) if areas else 0.0
+
+        boxes_dict: Dict[int, List[Tuple[np.ndarray, np.ndarray]]] = {}
+
+        # --- ESC по каждой грани ---
+        for face in self.mesh.faces:
+            tri = np.array([node.p for node in face.nodes], dtype=float)  # (3,3)
+            stack: List[np.ndarray] = [tri]
+            face_boxes: List[Tuple[np.ndarray, np.ndarray]] = []
+            produced = 0
+            iterations = 0
+
+            while stack and produced < max_boxes_per_face and iterations < max_iterations_per_face:
+                iterations += 1
+                poly = stack.pop()
+                if poly.shape[0] < 3:
+                    continue
+
+                bb_min = poly.min(axis=0)
+                bb_max = poly.max(axis=0)
+                sa = _aabb_surface_area(bb_min, bb_max)
+
+                # Условие остановки (Algorithm 4, line 4)
+                if sa <= sa_max or np.allclose(bb_max - bb_min, 0.0):
+                    face_boxes.append((bb_min.copy(), bb_max.copy()))
+                    produced += 1
+                    continue
+
+                # Axis of largest extent + splitPos in the middle (Algorithm 4, lines 8-9)
+                ext = bb_max - bb_min
+                axis = int(np.argmax(ext))
+                split_pos = float(0.5 * (bb_min[axis] + bb_max[axis]))
+
+                # clipNeg / clipPos (Algorithm 4, lines 10-11)
+                neg = _clip_polygon_halfspace(poly, axis=axis, split_pos=split_pos, keep_le=True)
+                pos = _clip_polygon_halfspace(poly, axis=axis, split_pos=split_pos, keep_le=False)
+
+                # push back (Algorithm 4, lines 13-14)
+                if neg.shape[0] >= 3:
+                    stack.append(neg)
+                if pos.shape[0] >= 3:
+                    stack.append(pos)
+
+            # Если достигли лимитов, добавим bbox остатка (чтобы грань всё равно внесла вклад в статистику)
+            # Это не часть Algorithm 4, но защита от "взрыва" количества боксов.
+            if stack and produced < max_boxes_per_face:
+                poly = stack.pop()
+                if poly.shape[0] >= 3:
+                    bb_min = poly.min(axis=0)
+                    bb_max = poly.max(axis=0)
+                    face_boxes.append((bb_min.copy(), bb_max.copy()))
+            
+            # Сохраняем боксы для данной грани
+            if face_boxes:
+                boxes_dict[face.glo_id] = face_boxes
+
+        return boxes_dict, sa_max
     
     def build_tree(self, split_func: SplitMetric = "sah") -> None:
         """
@@ -721,9 +951,10 @@ class BVHTree:
         # Вычисляем общий AABB для узла, итеративно включая AABB всех примитивов
         # Начинаем с пустого AABB, который будет расширен до минимального бокса,
         # содержащего все примитивы узла
+        # Используем ESC-боксы если они доступны (согласно Early Split Clipping)
         bb_min, bb_max = _aabb_empty()
         for p in plist_x:
-            bb_min, bb_max = _aabb_include(bb_min, bb_max, p.bb_min, p.bb_max)
+            bb_min, bb_max = _include_primitive_aabbs(bb_min, bb_max, p)
             
         # Критерий остановки рекурсии — создаём листовой узел
         # Если количество примитивов меньше или равно faces_in_node,
@@ -1080,21 +1311,23 @@ class BVHTree:
             # Первый проход (sweep справа налево): вычисляем AABB правых частей
             # Для каждого индекса i вычисляем AABB примитивов с индексами [i, n)
             # и сохраняем в right_bounds_min/max[i-1]
+            # Используем ESC-боксы если они доступны (согласно Early Split Clipping)
             rb_min, rb_max = _aabb_empty()
             for i in range(n - 1, 0, -1):
-                # Итеративно расширяем AABB, включая примитив с индексом i
-                rb_min, rb_max = _aabb_include(rb_min, rb_max, plist[i].bb_min, plist[i].bb_max)
+                # Итеративно расширяем AABB, включая все боксы примитива (ESC-боксы или стандартный AABB)
+                rb_min, rb_max = _include_primitive_aabbs(rb_min, rb_max, plist[i])
                 # Сохраняем AABB правой части для разбиения по индексу i
                 right_bounds_min[i - 1] = rb_min
                 right_bounds_max[i - 1] = rb_max
                 
             # Второй проход (sweep слева направо): вычисляем AABB левых частей и оцениваем метрику
             # Для каждого индекса i вычисляем AABB примитивов [0, i) и оцениваем стоимость разбиения
+            # Используем ESC-боксы если они доступны (согласно Early Split Clipping)
             lb_min, lb_max = _aabb_empty()
             for i in range(1, n):
-                # Включаем примитив с индексом i-1 в левую часть
+                # Включаем все боксы примитива с индексом i-1 в левую часть
                 p = plist[i - 1]
-                lb_min, lb_max = _aabb_include(lb_min, lb_max, p.bb_min, p.bb_max)
+                lb_min, lb_max = _include_primitive_aabbs(lb_min, lb_max, p)
                 
                 # Проверяем, что справа есть примитивы (разбиение имеет смысл)
                 if right_bounds_min[i - 1] is None:
@@ -1341,7 +1574,6 @@ class BVHTree:
         # Множество проверенных пар граней для избежания дублирования проверок
         # Хранит кортежи из отсортированных glo_id граней: (min_id, max_id)
         # Это гарантирует, что пара (a, b) и (b, a) проверяются только один раз
-        checked_pairs: set = set()
         # Счётчик обращений к checked_pairs (для статистики и отладки)
         checked_pairs_count = 0
         
@@ -1392,17 +1624,18 @@ class BVHTree:
                         # Это гарантирует, что пара (a, b) и (b, a) имеют одинаковый ключ
                         key = tuple(sorted((f1.glo_id, f2.glo_id)))
                         
+                        self.candidate_pairs_without_checked_pairs[len(self.candidate_pairs_without_checked_pairs)] = (f1, f2)
                         # --- Фильтрация 2: Проверка на дублирование пар ---
                         # Если такая пара уже проверялась ранее, пропускаем её
                         # Это происходит, когда одна и та же пара граней попадает в разные листовые узлы
-                        if key in checked_pairs:
+                        if key in self.checked_pairs:
                             logger.debug("BVHTree: node_a: %d, node_b: %d, count call to checked_pairs_count, %d", node_a.node_id, node_b.node_id, checked_pairs_count)
                             checked_pairs_count += 1
                             continue
                         
                         # Добавляем ключ проверенной пары в множество checked_pairs
                         # Это гарантирует, что пара не будет проверяться повторно
-                        checked_pairs.add(key)
+                        self.checked_pairs.add(key)
                         
                         # --- Фильтрация 3: Проверка на соседей ---
                         # Грани-соседи (имеющие общее ребро) не проверяются на пересечение,
@@ -1414,11 +1647,21 @@ class BVHTree:
                         
                         # --- Фильтрация 4: Дополнительная проверка AABB на уровне примитивов ---
                         # Хотя AABB узлов пересекаются, AABB отдельных граней могут не пересекаться
-                        # Используем предвычисленные AABB из PrimitiveRef (bb_min, bb_max),
-                        # которые были вычислены в prepare_mesh(), вместо пересчёта
-                        f1_min, f1_max = p1.bb_min, p1.bb_max
-                        f2_min, f2_max = p2.bb_min, p2.bb_max
-                        if not _aabb_intersect(f1_min, f1_max, f2_min, f2_max):
+                        # Используем ESC-боксы если они доступны (согласно Early Split Clipping),
+                        # иначе используем стандартные AABB из PrimitiveRef
+                        # Проверяем пересечение всех ESC-боксов одного примитива со всеми ESC-боксами другого
+                        f1_aabbs = _get_primitive_aabbs(p1)
+                        f2_aabbs = _get_primitive_aabbs(p2)
+                        # Если хотя бы одна пара ESC-боксов пересекается, примитивы потенциально пересекаются
+                        has_aabb_intersection = False
+                        for f1_min, f1_max in f1_aabbs:
+                            for f2_min, f2_max in f2_aabbs:
+                                if _aabb_intersect(f1_min, f1_max, f2_min, f2_max):
+                                    has_aabb_intersection = True
+                                    break
+                            if has_aabb_intersection:
+                                break
+                        if not has_aabb_intersection:
                             logger.debug("BVHTree: node_a: %d, node_b: %d, check intersection for f1: %d, f2: %d", node_a.node_id, node_b.node_id, f1.glo_id, f2.glo_id)
                             continue
                         
@@ -1436,7 +1679,7 @@ class BVHTree:
                         # - has_intersection: True если найдено пересечение, False иначе
                         # - intersection_result: список из 2 объектов Node (сегмент пересечения)
                         # - impossible_couple: список пар граней, попавших в impossible cases
-                        czc = CzechClassify(candidates=(f1, f2), checked_pairs=checked_pairs, pair_index=idx)
+                        czc = CzechClassify(candidates=(f1, f2), checked_pairs=self.checked_pairs, pair_index=idx)
                         has_intersection, intersection_result, impossible_couple = czc.get_intersection()
                         
                         # --- Обработка результата пересечения ---
@@ -1535,7 +1778,7 @@ class BVHTree:
                 for neighbor_face_a in neighbors_a:
                     # Проверяем, не проверяли ли мы уже эту пару ранее в основном цикле
                     pair_key = tuple(sorted((neighbor_face_a.glo_id, face_b.glo_id)))
-                    if pair_key in checked_pairs:
+                    if pair_key in self.checked_pairs:
                         continue
                     
                     # Фильтруем пары граней-соседей (они не могут пересекаться)
@@ -1543,7 +1786,7 @@ class BVHTree:
                         continue
                     
                     # Помечаем пару как проверенную
-                    checked_pairs.add(pair_key)
+                    self.checked_pairs.add(pair_key)
                     
                     # Выполняем геометрическую проверку пересечения для новой пары
                     neighbor_cz = CzechClassify(
@@ -1584,7 +1827,7 @@ class BVHTree:
                 for neighbor_face_b in neighbors_b:
                     # Проверяем, не проверяли ли мы уже эту пару ранее в основном цикле
                     pair_key = tuple(sorted((face_a.glo_id, neighbor_face_b.glo_id)))
-                    if pair_key in checked_pairs:
+                    if pair_key in self.checked_pairs:
                         continue
                     
                     # Фильтруем пары граней-соседей (они не могут пересекаться)
@@ -1592,7 +1835,7 @@ class BVHTree:
                         continue
                     
                     # Помечаем пару как проверенную
-                    checked_pairs.add(pair_key)
+                    self.checked_pairs.add(pair_key)
                     
                     # Выполняем геометрическую проверку пересечения для новой пары
                     neighbor_cz = CzechClassify(
@@ -1631,14 +1874,15 @@ class BVHTree:
             del self._impossible_pairs_queue
                                                          
         logger.info(
-            "BVHTree: traversal_tree finished; candidate_pairs=%d, candidate_pairs_after_czech=%d, faces_to_fix=%d, checked_pairs=%d, impossible_couples=%d",
+            "BVHTree: traversal_tree finished; candidate_pairs_without_checked_pairs=%d, candidate_pairs=%d, candidate_pairs_after_czech=%d, faces_to_fix=%d, checked_pairs=%d, impossible_couples=%d",
+            len(self.candidate_pairs_without_checked_pairs),
             len(self.candidate_pairs),
             len(self.candidate_pairs_after_czech),
             len(self.faces_to_fix),
-            len(checked_pairs),
+            len(self.checked_pairs),
             len(self.impossible_couples),
         )
-        logger.debug("BVHTree: Values in checked_pairs=%s", len(checked_pairs))
+        logger.debug("BVHTree: Values in checked_pairs=%s", len(self.checked_pairs))
         return self.faces_to_fix
                         
 
